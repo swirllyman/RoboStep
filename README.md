@@ -80,6 +80,24 @@ node scripts/test_web.js
 
 ---
 
+## 📱 One-Screen Layout (Phones, Tablets & Desktop)
+
+The whole game is designed to fit in a single screen with **no scrolling at all** — kids never have to hunt for the arrow buttons.
+
+- **Portrait phones**: the board sits on top, the chunky arrow pad underneath. The board automatically shrinks to whatever square fits the space left over, so the D-pad, Run/Step/Reset and the instruction tape are always visible.
+- **Big, readable arrows**: the directional buttons scale with the screen (up to ~96px tall on phones) and keep their word labels — **UP / DOWN / LEFT / RIGHT** — right under each arrow.
+- **Landscape phones & desktop**: the board and the control panel sit side by side, with the control stack centred.
+- **Notches & rounded corners**: safe-area insets are respected, and `100dvh` is used so the iOS Safari toolbar can't cut off the bottom row of buttons.
+- **Tight on space?** The layout sheds optional chrome first (tips, captions, button labels) before it ever shrinks a tap target.
+
+Run the layout regression check (needs Playwright) with:
+
+```powershell
+node scripts/check_layout.js
+```
+
+---
+
 ## 🎹 Keyboard Controls
 - **Arrow Keys** or **W, A, S, D**: Add directional command
 - **Spacebar**: Run / Reset toggle

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>RoboStep: Gem Quest - Logic & Counting Game for Kids</title>
   <!-- Google Fonts: Nunito -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,17 +27,17 @@
         </div>
       </div>
       <div class="nav-actions">
-        <button class="pill-btn accent" id="btn-wardrobe" title="Customize Robot">
-          <span>🎨</span> Workshop
+        <button class="pill-btn accent" id="btn-wardrobe" title="Customize Robot" aria-label="Workshop">
+          <span class="btn-emoji">🎨</span><span class="btn-label">Workshop</span>
         </button>
-        <button class="pill-btn" id="btn-voice" title="Robot Voice Settings">
-          <span>🎙️</span> Voice
+        <button class="pill-btn" id="btn-voice" title="Robot Voice Settings" aria-label="Voice settings">
+          <span class="btn-emoji">🎙️</span><span class="btn-label">Voice</span>
         </button>
-        <button class="pill-btn" id="btn-levels" title="Select Level">
-          <span>🗺️</span> Levels
+        <button class="pill-btn" id="btn-levels" title="Select Level" aria-label="Select level">
+          <span class="btn-emoji">🗺️</span><span class="btn-label">Levels</span>
         </button>
-        <button class="pill-btn" id="btn-sound" title="Toggle Sound">
-          🔊 Sound
+        <button class="pill-btn" id="btn-sound" title="Toggle Sound" aria-label="Toggle sound">
+          <span class="btn-emoji">🔊</span><span class="btn-label">Sound</span>
         </button>
       </div>
     </header>
@@ -79,8 +79,8 @@
             <h3>Instruction Sequence</h3>
             <span class="badge-counter" id="step-count-badge">0 Steps</span>
           </div>
-          <button class="tape-clear-btn" id="btn-clear-tape" title="Clear all instructions">
-            🗑️ Clear
+          <button class="tape-clear-btn" id="btn-clear-tape" title="Clear all instructions" aria-label="Clear all steps">
+            <span class="btn-emoji">🗑️</span><span class="btn-label">Clear</span>
           </button>
         </div>
         <div class="command-tape-viewport" id="command-tape">
@@ -122,10 +122,18 @@
 
         <!-- Secondary Control Tools -->
         <div class="secondary-bar">
-          <button class="sec-btn" id="btn-undo" title="Remove last instruction">⌫ Undo</button>
-          <button class="sec-btn" id="btn-clear" title="Clear all instructions">🗑️ Clear</button>
-          <button class="sec-btn" id="btn-hint" title="Show helpful hint">💡 Hint</button>
-          <button class="sec-btn" id="btn-speed" title="Adjust speed">🐇 Normal</button>
+          <button class="sec-btn" id="btn-undo" title="Remove last instruction" aria-label="Undo last step">
+            <span class="btn-emoji">⌫</span><span class="btn-label">Undo</span>
+          </button>
+          <button class="sec-btn" id="btn-clear" title="Clear all instructions" aria-label="Clear all steps">
+            <span class="btn-emoji">🗑️</span><span class="btn-label">Clear</span>
+          </button>
+          <button class="sec-btn" id="btn-hint" title="Show helpful hint" aria-label="Show hint">
+            <span class="btn-emoji">💡</span><span class="btn-label">Hint</span>
+          </button>
+          <button class="sec-btn" id="btn-speed" title="Adjust speed" aria-label="Adjust robot speed">
+            <span class="btn-emoji">🐇</span><span class="btn-label">Normal</span>
+          </button>
         </div>
 
       </section>
