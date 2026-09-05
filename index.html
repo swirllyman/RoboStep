@@ -42,105 +42,73 @@
       </div>
     </header>
 
-    <!-- Main Game Arena & Controls -->
+    <!-- The whole game lives in one frame: board on top, controls tucked
+         underneath (or alongside on wide screens). -->
     <main class="game-stage">
+      <section class="game-frame">
 
-      <!-- Left: Puzzle Grid Arena -->
-      <section class="arena-panel">
-        <div class="level-banner">
-          <div class="level-title-group">
-            <h2 id="level-title">Level 1: First Steps</h2>
-          </div>
+        <div class="frame-header">
+          <h2 id="level-title">Level 1: First Steps</h2>
           <div class="par-pill" id="level-par">Target: 2 steps</div>
         </div>
 
-        <!-- Recipe card: only shown for Smoothie Remix levels -->
-        <div class="recipe-bar" id="recipe-bar" hidden></div>
+        <div class="frame-body">
 
-        <!-- Dynamic Grid Viewport -->
-        <div class="grid-viewport">
-          <div id="game-grid" class="grid-container world-meadow">
-            <!-- Grid cells generated dynamically by game.js -->
+          <!-- Board side -->
+          <div class="board-column">
+            <!-- Recipe card: only shown for Smoothie Remix levels -->
+            <div class="recipe-bar" id="recipe-bar" hidden></div>
+
+            <div class="grid-viewport">
+              <div id="game-grid" class="grid-container world-meadow">
+                <!-- Grid cells generated dynamically by game.js -->
+              </div>
+            </div>
+
+            <div class="status-bar">
+              <div id="status-message" class="status-message"></div>
+              <div class="tip-box">
+                <span>💡</span> <span id="tip-text">Tap arrows to give your robot instructions!</span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Status & Friendly Help -->
-        <div class="status-bar">
-          <div id="status-message" class="status-message"></div>
-          <div class="tip-box">
-            <span>💡</span> <span id="tip-text">Tap arrows to give your robot instructions!</span>
+          <!-- Controls side -->
+          <div class="control-column">
+
+            <!-- The program the robot will run, plus the tools that edit it -->
+            <div class="program-row">
+              <div class="command-tape-viewport" id="command-tape">
+                <!-- Command chips generated dynamically -->
+              </div>
+              <span class="badge-counter" id="step-count-badge">0</span>
+              <div class="tool-chips">
+                <button class="chip-btn chip-undo" id="btn-undo" title="Undo last step" aria-label="Undo last step" data-icon="undo"></button>
+                <button class="chip-btn chip-clear" id="btn-clear" title="Clear all steps" aria-label="Clear all steps" data-icon="trash"></button>
+                <button class="chip-btn chip-hint" id="btn-hint" title="Show a hint" aria-label="Show a hint" data-icon="bulb"></button>
+                <button class="chip-btn chip-speed" id="btn-speed" title="Robot speed" aria-label="Robot speed: normal">🐇</button>
+              </div>
+            </div>
+
+            <!-- Gamepad: arrows on the left, play controls on the right -->
+            <div class="gamepad">
+              <div class="dpad-container">
+                <button class="arrow-btn dir-up" id="btn-up" title="Up" aria-label="Add step: up" data-icon="arrow"></button>
+                <button class="arrow-btn dir-left" id="btn-left" title="Left" aria-label="Add step: left" data-icon="arrow"></button>
+                <button class="arrow-btn dir-down" id="btn-down" title="Down" aria-label="Add step: down" data-icon="arrow"></button>
+                <button class="arrow-btn dir-right" id="btn-right" title="Right" aria-label="Add step: right" data-icon="arrow"></button>
+              </div>
+
+              <div class="action-cluster">
+                <button class="action-btn btn-run" id="btn-run" title="Run the whole program" aria-label="Run" data-icon="play"></button>
+                <button class="action-btn btn-step" id="btn-step" title="Run one step" aria-label="Run one step" data-icon="skip"></button>
+                <button class="action-btn btn-reset" id="btn-reset" title="Send the robot back to the start" aria-label="Reset robot" data-icon="reset"></button>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
-
-      <!-- Right: Kid-Friendly Coding Panel -->
-      <section class="controls-panel">
-
-        <!-- Command Sequence Tape -->
-        <div class="tape-header">
-          <div class="tape-title-group">
-            <h3>Instruction Sequence</h3>
-            <span class="badge-counter" id="step-count-badge">0 Steps</span>
-          </div>
-          <button class="tape-clear-btn" id="btn-clear-tape" title="Clear all instructions" aria-label="Clear all steps">
-            <span class="btn-emoji">🗑️</span><span class="btn-label">Clear</span>
-          </button>
-        </div>
-        <div class="command-tape-viewport" id="command-tape">
-          <!-- Command chips generated dynamically -->
-        </div>
-
-        <!-- Primary Action Playback Bar -->
-        <div class="action-bar">
-          <button class="action-btn btn-run" id="btn-run" title="Run all instructions">
-            <span>▶</span> Run
-          </button>
-          <button class="action-btn btn-step" id="btn-step" title="Step one instruction at a time">
-            <span>⏭</span> Step
-          </button>
-          <button class="action-btn btn-reset" id="btn-reset" title="Reset robot position">
-            <span>↺</span> Reset
-          </button>
-        </div>
-
-        <!-- Directional Keypad -->
-        <div class="dpad-container">
-          <button class="arrow-btn" id="btn-up" title="Move Up">
-            <span class="btn-icon">⬆️</span>
-            <span class="btn-text">Up</span>
-          </button>
-          <button class="arrow-btn" id="btn-left" title="Move Left">
-            <span class="btn-icon">⬅️</span>
-            <span class="btn-text">Left</span>
-          </button>
-          <button class="arrow-btn" id="btn-down" title="Move Down">
-            <span class="btn-icon">⬇️</span>
-            <span class="btn-text">Down</span>
-          </button>
-          <button class="arrow-btn" id="btn-right" title="Move Right">
-            <span class="btn-icon">➡️</span>
-            <span class="btn-text">Right</span>
-          </button>
-        </div>
-
-        <!-- Secondary Control Tools -->
-        <div class="secondary-bar">
-          <button class="sec-btn" id="btn-undo" title="Remove last instruction" aria-label="Undo last step">
-            <span class="btn-emoji">⌫</span><span class="btn-label">Undo</span>
-          </button>
-          <button class="sec-btn" id="btn-clear" title="Clear all instructions" aria-label="Clear all steps">
-            <span class="btn-emoji">🗑️</span><span class="btn-label">Clear</span>
-          </button>
-          <button class="sec-btn" id="btn-hint" title="Show helpful hint" aria-label="Show hint">
-            <span class="btn-emoji">💡</span><span class="btn-label">Hint</span>
-          </button>
-          <button class="sec-btn" id="btn-speed" title="Adjust speed" aria-label="Adjust robot speed">
-            <span class="btn-emoji">🐇</span><span class="btn-label">Normal</span>
-          </button>
-        </div>
-
-      </section>
-
     </main>
 
   </div>

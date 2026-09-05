@@ -1,5 +1,27 @@
 // game.js - Core Game Controller, Loop, Interpreter, and UI Logic
 
+// Hand-drawn control icons. One arrow shape is rotated per direction, so the
+// four arrows can never drift apart. `fill: currentColor` lets each button
+// colour its own icon.
+const ICONS = {
+  arrow: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 4.9a1.9 1.9 0 0 1 2.8 0l7 7.7c1.1 1.2.2 3.1-1.4 3.1h-3.6v2.6c0 1-.8 1.8-1.8 1.8h-3.2c-1 0-1.8-.8-1.8-1.8v-2.6H5c-1.6 0-2.5-1.9-1.4-3.1z"/></svg>',
+  play: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.4 4.6 19 11.1a1.1 1.1 0 0 1 0 1.8L8.4 19.4A1.1 1.1 0 0 1 6.7 18.5V5.5a1.1 1.1 0 0 1 1.7-.9z"/></svg>',
+  skip: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 4.9 15 11.1a1.1 1.1 0 0 1 0 1.8L6.4 19.1A1.1 1.1 0 0 1 4.7 18.2V5.8a1.1 1.1 0 0 1 1.7-.9z"/><rect x="16.6" y="4.9" width="3.2" height="14.2" rx="1.6"/></svg>',
+  reset: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.6a6.6 6.6 0 1 1-6.3 8.6" fill="none" stroke="currentColor" stroke-width="2.9" stroke-linecap="round"/><path d="M12.6 2.4v6.4L7.2 5.6z"/></svg>',
+  undo: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.4 8.2h4.9a4.9 4.9 0 0 1 0 9.8H8.6" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round"/><path d="M10.6 4.2v8L5.1 8.2z"/></svg>',
+  trash: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.4 3.4h5.2c.7 0 1.3.6 1.3 1.3v.9h3.2a1.2 1.2 0 0 1 0 2.4H4.9a1.2 1.2 0 0 1 0-2.4h3.2v-.9c0-.7.6-1.3 1.3-1.3z"/><path d="M6.6 9.6h10.8l-.8 9.4c-.1 1-.9 1.7-1.9 1.7H9.3c-1 0-1.8-.7-1.9-1.7z"/></svg>',
+  bulb: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6a6.8 6.8 0 0 1 4.1 12.2c-.6.5-1 1.2-1.1 1.9H9c-.1-.7-.5-1.4-1.1-1.9A6.8 6.8 0 0 1 12 2.6z"/><rect x="9" y="18.1" width="6" height="1.9" rx="1"/><rect x="9.9" y="20.6" width="4.2" height="1.8" rx="0.9"/></svg>'
+};
+
+// Buttons declare which icon they want with data-icon; this fills them in so
+// the markup stays free of duplicated SVG paths.
+function renderIcons(root = document) {
+  root.querySelectorAll('[data-icon]').forEach(el => {
+    const icon = ICONS[el.dataset.icon];
+    if (icon) el.innerHTML = icon;
+  });
+}
+
 const STEP_DELTAS = {
   UP: { dx: 0, dy: -1 },
   DOWN: { dx: 0, dy: 1 },
@@ -69,6 +91,7 @@ class GameController {
     this.tipTextEl = document.getElementById('tip-text');
     this.statusMsgEl = document.getElementById('status-message');
 
+    renderIcons();
     this.initEvents();
     this.initBoardFitting();
   }
@@ -242,7 +265,16 @@ class GameController {
       "Master Academy": "world-master",
       "Smoothie Kitchen": "world-kitchen"
     };
-    this.gridEl.className = `grid-container ${worldClasses[lvl.world] || 'world-meadow'}`;
+    // The very first paint should land on the level's real world colours.
+    // Without this the board fades in from the meadow palette baked into the
+    // markup, which flashes green on a canyon or chasm level.
+    const firstPaint = !this.hasPaintedBoard;
+    this.gridEl.className =
+      `grid-container ${worldClasses[lvl.world] || 'world-meadow'}${firstPaint ? ' no-fade' : ''}`;
+    if (firstPaint) {
+      this.hasPaintedBoard = true;
+      requestAnimationFrame(() => this.gridEl.classList.remove('no-fade'));
+    }
 
     const blockerMap = new Set(lvl.blockers.map(b => `${b.x},${b.y}`));
     const pitMap = new Set(lvl.pits.map(p => `${p.x},${p.y}`));
@@ -491,14 +523,9 @@ class GameController {
 
   renderCommandTape() {
     this.commandTapeEl.innerHTML = "";
-    this.stepCountEl.textContent = `${this.commands.length} Steps`;
+    this.stepCountEl.textContent = this.commands.length;
 
-    const arrows = {
-      UP: { symbol: "⬆️", label: "Up" },
-      DOWN: { symbol: "⬇️", label: "Down" },
-      LEFT: { symbol: "⬅️", label: "Left" },
-      RIGHT: { symbol: "➡️", label: "Right" }
-    };
+    const dirClass = { UP: 'dir-up', DOWN: 'dir-down', LEFT: 'dir-left', RIGHT: 'dir-right' };
 
     if (this.commands.length === 0) {
       this.commandTapeEl.innerHTML = `
@@ -517,12 +544,12 @@ class GameController {
         card.classList.add('active-executing');
       }
 
-      const item = arrows[cmd];
+      card.classList.add(dirClass[cmd]);
+      card.setAttribute('aria-label', `Step ${idx + 1}: ${cmd.toLowerCase()}`);
       card.innerHTML = `
-        <div class="card-step-num">${idx + 1}</div>
-        <div class="card-arrow">${item.symbol}</div>
-        <div class="card-name">${item.label}</div>
-        <button class="card-del-btn" title="Remove step" onclick="window.game.removeCommandAt(${idx})">×</button>
+        <span class="card-step-num">${idx + 1}</span>
+        <span class="card-arrow">${ICONS.arrow}</span>
+        <button class="card-del-btn" title="Remove this step" aria-label="Remove step ${idx + 1}" onclick="window.game.removeCommandAt(${idx})">×</button>
       `;
 
       this.commandTapeEl.appendChild(card);
@@ -544,7 +571,6 @@ class GameController {
     const stepBtn = document.getElementById('btn-step');
     const resetBtn = document.getElementById('btn-reset');
     const clearBtn = document.getElementById('btn-clear');
-    const clearTapeBtn = document.getElementById('btn-clear-tape');
     const undoBtn = document.getElementById('btn-undo');
 
     const hasCommands = this.commands.length > 0;
@@ -552,7 +578,6 @@ class GameController {
     runBtn.disabled = !hasCommands || this.isRunning;
     stepBtn.disabled = !hasCommands || this.isRunning;
     clearBtn.disabled = !hasCommands || this.isRunning;
-    if (clearTapeBtn) clearTapeBtn.disabled = !hasCommands || this.isRunning;
     undoBtn.disabled = !hasCommands || this.isRunning;
     resetBtn.disabled = this.isRunning;
   }
@@ -1387,10 +1412,6 @@ class GameController {
     document.getElementById('btn-step').onclick = () => this.stepOnce();
     document.getElementById('btn-reset').onclick = () => this.resetRobot();
     document.getElementById('btn-clear').onclick = () => this.clearCommands();
-    const clearTapeBtn = document.getElementById('btn-clear-tape');
-    if (clearTapeBtn) {
-      clearTapeBtn.onclick = () => this.clearCommands();
-    }
     document.getElementById('btn-undo').onclick = () => this.removeLastCommand();
     document.getElementById('btn-hint').onclick = () => this.showHint();
 
@@ -1406,7 +1427,9 @@ class GameController {
       curSpeedIdx = (curSpeedIdx + 1) % speeds.length;
       const next = speeds[curSpeedIdx];
       this.speed = next.ms;
-      setButtonLabel(speedBtn, next.emoji, next.label, `Speed: ${next.label}`);
+      speedBtn.textContent = next.emoji;
+      speedBtn.title = `Robot speed: ${next.label}`;
+      speedBtn.setAttribute('aria-label', `Robot speed: ${next.label}`);
       Sound.playClick();
     };
 

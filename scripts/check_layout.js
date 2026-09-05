@@ -24,9 +24,10 @@ try {
 
 const PAGE_URL = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
-// Minimum comfortable arrow-button size (px). Kid-sized fingers need room.
-const MIN_ARROW_WIDTH = 60;
-const MIN_ARROW_HEIGHT = 38;
+// Minimum tap target (px) in both directions - the 44px both platforms
+// recommend, which is the bar that actually matters for small fingers.
+const MIN_ARROW_WIDTH = 44;
+const MIN_ARROW_HEIGHT = 44;
 
 const VIEWPORTS = [
   { name: 'Galaxy Fold (portrait)', width: 320, height: 653 },
@@ -69,7 +70,7 @@ async function measure(page) {
     };
 
     const clipped = [];
-    ['#app-container', '.top-nav', '.arena-panel', '.controls-panel'].forEach((sel) => {
+    ['#app-container', '.top-nav', '.game-frame', '.control-column'].forEach((sel) => {
       const el = document.querySelector(sel);
       if (!el) return;
       if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) {
@@ -82,10 +83,15 @@ async function measure(page) {
       overflowY: doc.scrollHeight - doc.clientHeight,
       viewportHeight: doc.clientHeight,
       clipped,
-      lastRowBottom: box('.secondary-bar') ? box('.secondary-bar').bottom : 0,
+      lastRowBottom: box('.gamepad') ? box('.gamepad').bottom : 0,
       board: box('#game-grid'),
+      controls: box('.control-column'),
+      // Only meaningful when the controls sit UNDER the board; side by side
+      // they fill the column height by design.
+      stacked: getComputedStyle(document.querySelector('.frame-body')).flexDirection === 'column',
       arrowUp: box('#btn-up'),
-      arrowLeft: box('#btn-left')
+      arrowLeft: box('#btn-left'),
+      run: box('#btn-run')
     };
   });
 }
@@ -133,8 +139,14 @@ async function measure(page) {
 
     if (m.overflowY > 0) problems.push(`page scrolls vertically by ${m.overflowY}px`);
     if (m.overflowX > 0) problems.push(`page scrolls horizontally by ${m.overflowX}px`);
-    if (m.lastRowBottom > m.viewportHeight) problems.push('tool bar falls below the fold');
+    if (m.lastRowBottom > m.viewportHeight) problems.push('gamepad falls below the fold');
     if (m.clipped.length) problems.push(`clipped contents: ${m.clipped.join(', ')}`);
+    // The controls exist to serve the board, not to crowd it out.
+    if (m.stacked && m.controls && m.controls.h > m.viewportHeight * 0.4) {
+      problems.push(`controls take ${Math.round((m.controls.h / m.viewportHeight) * 100)}% of the screen`);
+    }
+    // Run is wide, so it only needs to be tall enough to hit confidently.
+    if (m.run && m.run.h < 36) problems.push(`run button too short (${m.run.w}x${m.run.h})`);
     [['up', m.arrowUp], ['left', m.arrowLeft]].forEach(([name, b]) => {
       if (!b) {
         problems.push(`missing ${name} arrow`);
@@ -149,7 +161,10 @@ async function measure(page) {
       failures++;
       console.log(`FAIL  ${label} ${problems.join('; ')}`);
     } else {
-      console.log(`ok    ${label} board ${m.board.w}px, arrows ${m.arrowUp.w}x${m.arrowUp.h}px`);
+      const share = m.stacked && m.controls
+        ? `, controls ${Math.round((m.controls.h / m.viewportHeight) * 100)}% of screen`
+        : '';
+      console.log(`ok    ${label} board ${m.board.w}px, arrows ${m.arrowUp.w}x${m.arrowUp.h}px${share}`);
     }
 
     await context.close();

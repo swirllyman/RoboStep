@@ -106,9 +106,11 @@ node scripts/test_web.js
 
 The whole game is designed to fit in a single screen with **no scrolling at all** — kids never have to hunt for the arrow buttons.
 
-- **Portrait phones**: the board sits on top, the chunky arrow pad underneath. The board automatically shrinks to whatever square fits the space left over, so the D-pad, Run/Step/Reset and the instruction tape are always visible.
-- **Big, readable arrows**: the directional buttons scale with the screen (up to ~96px tall on phones) and keep their word labels — **UP / DOWN / LEFT / RIGHT** — right under each arrow.
-- **Landscape phones & desktop**: the board and the control panel sit side by side, with the control stack centred.
+- **One frame**: the board, the program strip and the gamepad all live inside a single rounded game frame rather than separate floating panels.
+- **The board is the star**: on a phone the controls take only about a quarter of the screen, and the board grows into everything that's left (roughly 290–375px on common phones).
+- **Icons, not labels**: every control is a chunky rounded button whose shape and colour say what it does — four coloured arrows, a big green ▶, blue step, amber reset, and small round tools for undo / clear / hint / speed. Names live in tooltips and screen-reader labels instead of cluttering the buttons.
+- **Gamepad layout**: arrows on the left, play controls on the right, exactly where a thumb expects them. Every arrow stays at or above the 44px tap-target guideline on every screen tested.
+- **Landscape phones & desktop**: the board and the controls sit side by side inside the same frame; on short landscape screens the pad stacks above the play buttons so the arrows keep their size.
 - **Notches & rounded corners**: safe-area insets are respected, and `100dvh` is used so the iOS Safari toolbar can't cut off the bottom row of buttons.
 - **Tight on space?** The layout sheds optional chrome first (tips, captions, button labels) before it ever shrinks a tap target.
 
