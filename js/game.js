@@ -35,8 +35,15 @@ function previewMove(level, pos, cmd) {
 class GameController {
   constructor() {
     this.currentLevelIdx = 0;
-    this.maxUnlockedLevel = parseInt(localStorage.getItem('robostep_max_level') || '1', 10);
-    this.starsData = JSON.parse(localStorage.getItem('robostep_stars') || '{}');
+    // 'classic' plays the 50-level gem quest, 'smoothie' plays Smoothie Remix.
+    // Each mode keeps its own progress, so neither overwrites the other.
+    this.mode = localStorage.getItem('robostep_mode') === 'smoothie' ? 'smoothie' : 'classic';
+    this.loadProgress();
+
+    // Ingredients picked up so far this attempt (keys of "x,y"), and how far
+    // through the blend-and-drink celebration we are.
+    this.collected = new Set();
+    this.smoothieStage = null;
     
     // Play state
     this.commands = [];
@@ -67,13 +74,80 @@ class GameController {
   }
 
   start() {
-    // Load first level or last played level
-    const lastPlayed = parseInt(localStorage.getItem('robostep_last_played') || '1', 10);
-    this.loadLevel(Math.min(lastPlayed, this.maxUnlockedLevel) - 1);
+    // Load first level or last played level of whichever mode was last open
+    const lastPlayed = parseInt(localStorage.getItem(this.progressKey('last_played')) || '1', 10);
+    this.loadLevel(Math.min(lastPlayed, this.maxUnlockedLevel, this.getLevelSet().length) - 1);
+  }
+
+  // ==========================================
+  // MODES: CLASSIC GEM QUEST & SMOOTHIE REMIX
+  // The rules follow the level data, not the mode name: any level carrying
+  // `ingredients` and a `blender` is played as a smoothie recipe.
+  // ==========================================
+  getLevelSet() {
+    return this.mode === 'smoothie' ? SMOOTHIE_LEVELS : LEVELS;
   }
 
   getCurrentLevel() {
-    return LEVELS[this.currentLevelIdx];
+    return this.getLevelSet()[this.currentLevelIdx];
+  }
+
+  // The square the robot has to finish on: a blender if there is one, else the gem.
+  goalSquare(level) {
+    return level.blender || level.gem;
+  }
+
+  ingredientsOf(level) {
+    return level.ingredients || [];
+  }
+
+  isRecipeLevel(level) {
+    return this.ingredientsOf(level).length > 0;
+  }
+
+  progressKey(name) {
+    return this.mode === 'smoothie' ? `robostep_smoothie_${name}` : `robostep_${name}`;
+  }
+
+  loadProgress() {
+    this.maxUnlockedLevel = parseInt(localStorage.getItem(this.progressKey('max_level')) || '1', 10);
+    this.starsData = JSON.parse(localStorage.getItem(this.progressKey('stars')) || '{}');
+  }
+
+  setMode(mode) {
+    const next = mode === 'smoothie' ? 'smoothie' : 'classic';
+    if (next === this.mode) return;
+
+    this.mode = next;
+    localStorage.setItem('robostep_mode', next);
+    this.loadProgress();
+
+    const lastPlayed = parseInt(localStorage.getItem(this.progressKey('last_played')) || '1', 10);
+    this.loadLevel(Math.min(lastPlayed, this.maxUnlockedLevel, this.getLevelSet().length) - 1);
+  }
+
+  // Ingredients are tracked by square, since no two share one.
+  ingredientKey(pos) {
+    return `${pos.x},${pos.y}`;
+  }
+
+  remainingIngredients(level = this.getCurrentLevel(), collected = this.collected) {
+    return this.ingredientsOf(level).filter(i => !collected.has(this.ingredientKey(i)));
+  }
+
+  recipeComplete(level = this.getCurrentLevel(), collected = this.collected) {
+    return this.remainingIngredients(level, collected).length === 0;
+  }
+
+  isOnGoal(level = this.getCurrentLevel(), pos = this.robotPos) {
+    const goal = this.goalSquare(level);
+    return pos.x === goal.x && pos.y === goal.y;
+  }
+
+  // The robot has won once it is standing on the goal with the whole recipe.
+  hasWon() {
+    const lvl = this.getCurrentLevel();
+    return this.isOnGoal(lvl) && this.recipeComplete(lvl);
   }
 
   // ==========================================
@@ -112,13 +186,15 @@ class GameController {
   }
 
   loadLevel(levelIndex) {
-    if (levelIndex < 0 || levelIndex >= LEVELS.length) return;
+    if (levelIndex < 0 || levelIndex >= this.getLevelSet().length) return;
     this.currentLevelIdx = levelIndex;
-    localStorage.setItem('robostep_last_played', (levelIndex + 1).toString());
+    localStorage.setItem(this.progressKey('last_played'), (levelIndex + 1).toString());
 
     this.stopRunning();
     this.commands = [];
     this.trail = [];
+    this.collected = new Set();
+    this.smoothieStage = null;
     this.statusMsgEl.textContent = "";
     this.statusMsgEl.className = "status-message";
 
@@ -137,6 +213,7 @@ class GameController {
     this.levelParEl.textContent = `Target: ${lvl.par} steps`;
     this.tipTextEl.textContent = lvl.tip || "Plan your route to the gem!";
 
+    this.renderRecipeBar();
     this.renderGrid();
     this.renderCommandTape();
     this.updateControlsState();
@@ -162,7 +239,8 @@ class GameController {
       "Rocky Canyon": "world-canyon",
       "Danger Chasm": "world-chasm",
       "Circuit City": "world-city",
-      "Master Academy": "world-master"
+      "Master Academy": "world-master",
+      "Smoothie Kitchen": "world-kitchen"
     };
     this.gridEl.className = `grid-container ${worldClasses[lvl.world] || 'world-meadow'}`;
 
@@ -207,8 +285,14 @@ class GameController {
             </div>
           `;
         }
+        // Blender (smoothie levels): the goal, and a live progress meter -
+        // it fills with the recipe colour as ingredients are collected.
+        else if (lvl.blender && lvl.blender.x === x && lvl.blender.y === y) {
+          cell.classList.add('cell-blender');
+          cell.innerHTML = this.renderBlenderHTML(lvl);
+        }
         // Goal Gem
-        else if (lvl.gem.x === x && lvl.gem.y === y) {
+        else if (lvl.gem && lvl.gem.x === x && lvl.gem.y === y) {
           cell.classList.add('cell-gem');
           cell.innerHTML = `
             <div class="gem-wrapper" title="Goal Gem">
@@ -222,6 +306,18 @@ class GameController {
               <div class="gem-glow"></div>
             </div>
           `;
+        }
+
+        // Ingredient waiting to be picked up
+        const ingredient = this.ingredientsOf(lvl)
+          .find(i => i.x === x && i.y === y && !this.collected.has(this.ingredientKey(i)));
+        if (ingredient) {
+          cell.classList.add('cell-ingredient');
+          const token = document.createElement('div');
+          token.className = 'ingredient-token';
+          token.title = ingredient.name;
+          token.textContent = ingredient.emoji;
+          cell.appendChild(token);
         }
 
         // Breadcrumb Trail dot
@@ -252,15 +348,88 @@ class GameController {
     this.fitBoard();
   }
 
+  // Blender jug, drawn with the recipe colour filling it as ingredients go in.
+  // During the celebration it whirs, then becomes the finished smoothie.
+  renderBlenderHTML(level) {
+    const recipe = level.recipe || { color: "#38BDF8", name: "Smoothie" };
+    const total = this.ingredientsOf(level).length;
+    const inJug = total - this.remainingIngredients(level).length;
+    const ratio = total ? inJug / total : 0;
+
+    if (this.smoothieStage === 'served') {
+      // A finished glass, straw and all.
+      return `
+        <div class="blender-wrapper served" title="${recipe.name}">
+          <svg viewBox="0 0 60 60" width="92%" height="92%">
+            <line x1="38" y1="6" x2="30" y2="26" stroke="#F472B6" stroke-width="4" stroke-linecap="round" />
+            <path d="M16,18 L44,18 L39,52 L21,52 Z" fill="${recipe.color}" stroke="#0F172A" stroke-width="2.5" stroke-linejoin="round" />
+            <path d="M16,18 L44,18 L43,24 L17,24 Z" fill="#FFFFFF" opacity="0.45" />
+            <circle cx="24" cy="30" r="2.5" fill="#FFFFFF" opacity="0.5" />
+            <circle cx="33" cy="38" r="2" fill="#FFFFFF" opacity="0.4" />
+          </svg>
+        </div>
+      `;
+    }
+
+    const fillHeight = Math.round(30 * ratio);
+    const fillY = 40 - fillHeight;
+    const whirring = this.smoothieStage === 'blending' ? ' whirring' : '';
+
+    return `
+      <div class="blender-wrapper${whirring}" title="Blender (${inJug}/${total} in)">
+        <svg viewBox="0 0 60 60" width="92%" height="92%">
+          <rect x="19" y="42" width="22" height="10" rx="3" fill="#475569" />
+          <rect x="16" y="50" width="28" height="4" rx="2" fill="#334155" />
+          <rect x="18" y="10" width="24" height="32" rx="4" fill="#F8FAFC" opacity="0.85" stroke="#94A3B8" stroke-width="2" />
+          ${fillHeight > 0 ? `<rect x="20" y="${fillY}" width="20" height="${fillHeight}" rx="2" fill="${recipe.color}" />` : ''}
+          <rect x="15" y="5" width="30" height="7" rx="3" fill="#64748B" />
+          <rect x="27" y="2" width="6" height="4" rx="2" fill="#334155" />
+        </svg>
+      </div>
+    `;
+  }
+
+  // The recipe card above the board: every ingredient, ticked off as it is
+  // picked up, so kids can count what is still missing.
+  renderRecipeBar() {
+    const bar = document.getElementById('recipe-bar');
+    if (!bar) return;
+
+    const lvl = this.getCurrentLevel();
+    if (!this.isRecipeLevel(lvl)) {
+      bar.hidden = true;
+      return;
+    }
+
+    const recipe = lvl.recipe || { name: "Smoothie", emoji: "🥤" };
+    const chips = this.ingredientsOf(lvl).map(ing => {
+      const got = this.collected.has(this.ingredientKey(ing));
+      return `<span class="recipe-chip ${got ? 'collected' : ''}" title="${ing.name}">${ing.emoji}</span>`;
+    }).join('');
+
+    const left = this.remainingIngredients(lvl).length;
+    bar.innerHTML = `
+      <span class="recipe-name">${recipe.emoji} ${recipe.name}</span>
+      <span class="recipe-items">${chips}</span>
+      <span class="recipe-count">${left === 0 ? 'Blend it!' : `${left} to go`}</span>
+    `;
+    bar.hidden = false;
+  }
+
   // ==========================================
   // COMMAND QUEUE MANAGEMENT
   // ==========================================
+  // The robot has finished with this attempt: it won, fell, or is busy with
+  // the smoothie celebration. Any of those means a Run starts over.
+  isFinishedState() {
+    return ["victory", "fall", "blending", "drinking"].includes(this.robotState);
+  }
+
   // A program that has already been run (or part-stepped) no longer lines up
   // with the robot on screen once the list is edited. Rewinding to the start
   // line keeps "step 1" meaning step 1, and keeps the breadcrumb trail honest.
   rewindIfExecuted() {
-    const finished = this.robotState === "victory" || this.robotState === "fall";
-    if (this.executionStep === 0 && !finished) return false;
+    if (this.executionStep === 0 && !this.isFinishedState()) return false;
     this.resetRobot();
     return true;
   }
@@ -399,7 +568,7 @@ class GameController {
     }
     
     // If starting from clean state, reset robot position to level start
-    if (this.executionStep >= this.commands.length || this.robotState === "victory" || this.robotState === "fall") {
+    if (this.executionStep >= this.commands.length || this.isFinishedState()) {
       this.resetRobot();
     }
 
@@ -416,12 +585,11 @@ class GameController {
 
     if (this.executionStep >= this.commands.length) {
       this.stopRunning();
-      // Check if robot is on gem
       const lvl = this.getCurrentLevel();
-      if (this.robotPos.x === lvl.gem.x && this.robotPos.y === lvl.gem.y) {
+      if (this.hasWon()) {
         this.handleVictory();
       } else {
-        this.showMessage("Instructions finished! But the robot didn't reach the gem yet. Try adding more steps!", "info");
+        this.showMessage(this.unfinishedMessage(lvl), "info");
       }
       return;
     }
@@ -432,12 +600,17 @@ class GameController {
       return;
     }
 
-    // Check if stepped onto gem right away!
+    // Check if the robot has just finished the job
     const lvl = this.getCurrentLevel();
-    if (this.robotPos.x === lvl.gem.x && this.robotPos.y === lvl.gem.y) {
+    if (this.hasWon()) {
       this.stopRunning();
       this.handleVictory();
       return;
+    }
+    // Rolling over the blender early is allowed - it just doesn't blend.
+    if (this.isOnGoal(lvl) && this.isRecipeLevel(lvl)) {
+      const left = this.remainingIngredients(lvl).length;
+      this.showMessage(`The blender needs ${left} more ingredient${left === 1 ? '' : 's'} first!`, "warn");
     }
 
     this.runTimer = setTimeout(() => {
@@ -452,16 +625,27 @@ class GameController {
       Voice.speakButton("Step");
     }
 
-    if (this.executionStep >= this.commands.length || this.robotState === "victory" || this.robotState === "fall") {
+    if (this.executionStep >= this.commands.length || this.isFinishedState()) {
       this.resetRobot();
     }
 
     this.executeSingleStep();
 
-    const lvl = this.getCurrentLevel();
-    if (this.robotPos.x === lvl.gem.x && this.robotPos.y === lvl.gem.y) {
+    if (this.hasWon()) {
       this.handleVictory();
     }
+  }
+
+  // What to say when the program runs out without finishing the job.
+  unfinishedMessage(level) {
+    if (this.isRecipeLevel(level)) {
+      const left = this.remainingIngredients(level).length;
+      if (left > 0) {
+        return `Instructions finished! Still ${left} ingredient${left === 1 ? '' : 's'} to collect. Try adding more steps!`;
+      }
+      return "Everything is collected! Now add steps to reach the blender.";
+    }
+    return "Instructions finished! But the robot didn't reach the gem yet. Try adding more steps!";
   }
 
   executeSingleStep() {
@@ -516,6 +700,7 @@ class GameController {
     this.trail.push({ ...this.robotPos });
     this.robotPos = { ...move.pos };
     this.robotState = "walking";
+    this.collectIngredientHere();
 
     // Play musical step tone pitched according to step index (1, 2, 3...)
     Sound.playStep(this.executionStep + 1);
@@ -530,6 +715,30 @@ class GameController {
     this.renderCommandTape();
 
     return true;
+  }
+
+  // Rolling onto an ingredient picks it up and pours it into the blender.
+  collectIngredientHere() {
+    const lvl = this.getCurrentLevel();
+    const here = this.ingredientsOf(lvl).find(i =>
+      i.x === this.robotPos.x && i.y === this.robotPos.y && !this.collected.has(this.ingredientKey(i))
+    );
+    if (!here) return;
+
+    this.collected.add(this.ingredientKey(here));
+    Sound.playPickup(this.ingredientsOf(lvl).length - this.remainingIngredients(lvl).length);
+    this.renderRecipeBar();
+
+    const left = this.remainingIngredients(lvl).length;
+    if (typeof Voice !== 'undefined') {
+      Voice.speakEvent(left === 0 ? `${here.name}! Recipe complete!` : `${here.name}!`);
+    }
+    this.showMessage(
+      left === 0
+        ? `${here.emoji} ${here.name}! Recipe complete - take it to the blender!`
+        : `${here.emoji} ${here.name}! ${left} more to collect.`,
+      "info"
+    );
   }
 
   stopRunning() {
@@ -552,8 +761,11 @@ class GameController {
     this.robotState = "idle";
     this.executionStep = 0;
     this.trail = [];
+    this.collected = new Set();
+    this.smoothieStage = null;
     this.statusMsgEl.textContent = "";
     this.statusMsgEl.className = "status-message";
+    this.renderRecipeBar();
     this.renderGrid();
     this.renderCommandTape();
     this.updateControlsState();
@@ -568,15 +780,19 @@ class GameController {
   // VICTORY & LEVEL PROGRESSION
   // ==========================================
   handleVictory() {
-    this.robotState = "victory";
-    this.renderGrid();
-    Sound.playGem();
-    setTimeout(() => Sound.playWin(), 200);
-
-    // Launch Confetti!
-    triggerConfetti();
-
     const lvl = this.getCurrentLevel();
+
+    if (this.isRecipeLevel(lvl)) {
+      // Smoothie levels get their own little show before the modal.
+      this.playSmoothieCelebration(lvl);
+    } else {
+      this.robotState = "victory";
+      this.renderGrid();
+      Sound.playGem();
+      setTimeout(() => Sound.playWin(), 200);
+      triggerConfetti();
+    }
+
     const stepCount = this.commands.length;
     let stars = 1;
     if (stepCount <= lvl.par) {
@@ -589,22 +805,22 @@ class GameController {
     const prevStars = this.starsData[lvl.id] || 0;
     if (stars > prevStars) {
       this.starsData[lvl.id] = stars;
-      localStorage.setItem('robostep_stars', JSON.stringify(this.starsData));
+      localStorage.setItem(this.progressKey('stars'), JSON.stringify(this.starsData));
     }
 
     // Unlock next level
     const nextLevelNum = lvl.id + 1;
-    let isNewUnlock = false;
-    if (nextLevelNum <= LEVELS.length && nextLevelNum > this.maxUnlockedLevel) {
+    if (nextLevelNum <= this.getLevelSet().length && nextLevelNum > this.maxUnlockedLevel) {
       this.maxUnlockedLevel = nextLevelNum;
-      localStorage.setItem('robostep_max_level', this.maxUnlockedLevel.toString());
-      isNewUnlock = true;
+      localStorage.setItem(this.progressKey('max_level'), this.maxUnlockedLevel.toString());
     }
 
-    // Check Milestone Customization Reward (Every 5 levels: 5, 10, 15, 20... 50)
-    const reward = (lvl.id % 5 === 0) ? Customizer.getMilestoneReward(lvl.id) : null;
+    // Robot parts are earned in the classic quest, every 5 levels.
+    const reward = (this.mode === 'classic' && lvl.id % 5 === 0)
+      ? Customizer.getMilestoneReward(lvl.id)
+      : null;
 
-    if (typeof Voice !== 'undefined') {
+    if (typeof Voice !== 'undefined' && !this.isRecipeLevel(lvl)) {
       if (stars === 3) {
         Voice.speakRandom(["Super star coder! Three stars!", "You did it! Perfect path!", "Hooray! Three stars!"]);
       } else {
@@ -612,13 +828,53 @@ class GameController {
       }
     }
 
+    // The smoothie show needs a moment before the modal covers the board.
+    const modalDelay = this.isRecipeLevel(lvl) ? 2600 : 600;
+
     setTimeout(() => {
       if (reward) {
         this.showMilestoneModal(reward, lvl.id, stars, stepCount);
       } else {
         this.showWinModal(stars, stepCount, lvl.par, nextLevelNum);
       }
-    }, 600);
+    }, modalDelay);
+  }
+
+  // Blend it, pour it, drink it. The whole point of Smoothie Remix.
+  playSmoothieCelebration(level) {
+    const recipe = level.recipe || { name: "Smoothie", emoji: "🥤" };
+
+    // 1. The blender whirs with the robot standing right there.
+    this.smoothieStage = 'blending';
+    this.robotState = "blending";
+    this.renderGrid();
+    Sound.playBlend();
+    this.showMessage(`Blending your ${recipe.name}...`, "running");
+    if (typeof Voice !== 'undefined') {
+      Voice.speakEvent(`Blending your ${recipe.name}!`);
+    }
+
+    // 2. The smoothie is served and the robot takes a big slurp.
+    setTimeout(() => {
+      this.smoothieStage = 'served';
+      this.robotState = "drinking";
+      this.renderGrid();
+      Sound.playSlurp();
+      this.showMessage(`Slurp! ${recipe.emoji} So yummy!`, "info");
+      if (typeof Voice !== 'undefined') {
+        Voice.speakRandom([
+          "Slurp! So yummy!",
+          "Mmm! So yummy!",
+          "Glug glug! Yummy smoothie!"
+        ]);
+      }
+    }, 1100);
+
+    // 3. Party.
+    setTimeout(() => {
+      triggerConfetti();
+      Sound.playWin();
+    }, 1900);
   }
 
   showWinModal(stars, stepCount, par, nextLevelNum) {
@@ -634,19 +890,32 @@ class GameController {
       <span class="star ${stars >= 3 ? 'earned' : ''}">⭐</span>
     `;
 
-    titleEl.textContent = stars === 3 ? "Super Star Coder! 🌟" : "Awesome Job! 💎";
-    statsEl.innerHTML = `You solved it in <strong>${stepCount}</strong> steps! (Target par: ${par})`;
+    const lvl = this.getCurrentLevel();
+    const recipeLevel = this.isRecipeLevel(lvl);
+    const recipe = lvl.recipe || { name: "Smoothie", emoji: "🥤" };
 
-    if (nextLevelNum <= LEVELS.length) {
+    if (recipeLevel) {
+      titleEl.textContent = `So yummy! ${recipe.emoji}`;
+      statsEl.innerHTML =
+        `The robot drank the whole <strong>${recipe.name}</strong>!<br>` +
+        `Made in <strong>${stepCount}</strong> steps (target par: ${par})`;
+    } else {
+      titleEl.textContent = stars === 3 ? "Super Star Coder! 🌟" : "Awesome Job! 💎";
+      statsEl.innerHTML = `You solved it in <strong>${stepCount}</strong> steps! (Target par: ${par})`;
+    }
+
+    if (nextLevelNum <= this.getLevelSet().length) {
       nextBtn.style.display = "inline-flex";
-      nextBtn.textContent = `Next Level (${nextLevelNum}) ➔`;
+      nextBtn.textContent = recipeLevel ? `Next Recipe (${nextLevelNum}) ➔` : `Next Level (${nextLevelNum}) ➔`;
       nextBtn.onclick = () => {
         this.closeModal('win-modal');
         this.loadLevel(nextLevelNum - 1);
       };
     } else {
       nextBtn.style.display = "none";
-      statsEl.innerHTML += "<br><strong>🎉 You have completed all 50 levels! You are a master robot programmer!</strong>";
+      statsEl.innerHTML += recipeLevel
+        ? "<br><strong>🥤 You blended every smoothie on the menu! Master Blender!</strong>"
+        : "<br><strong>🎉 You have completed all 50 levels! You are a master robot programmer!</strong>";
     }
 
     modal.classList.add('open');
@@ -708,22 +977,50 @@ class GameController {
   // Walks the instructions that have not run yet, without touching game state,
   // to find the square the robot will actually be standing on when the current
   // program finishes (or where it goes wrong).
-  projectProgram(level, from, commands) {
+  projectProgram(level, from, commands, collected = this.collected) {
     let pos = { ...from };
+    // Ingredients the robot would be carrying by then, so the projection knows
+    // whether arriving at the blender actually finishes the level.
+    const basket = new Set(collected);
+    const goal = this.goalSquare(level);
 
     for (let i = 0; i < commands.length; i++) {
       const move = previewMove(level, pos, commands[i]);
       // Report the square in front of the mistake: that is where advice helps.
-      if (move.blocked) return { pos, blocked: move.blocked, stepIndex: i };
+      if (move.blocked) return { pos, blocked: move.blocked, stepIndex: i, collected: basket };
 
       pos = move.pos;
-      // The run stops the moment the gem is reached, so later steps never run.
-      if (pos.x === level.gem.x && pos.y === level.gem.y) {
-        return { pos, reachedGem: true, stepIndex: i };
+
+      const picked = this.ingredientsOf(level)
+        .find(ing => ing.x === pos.x && ing.y === pos.y);
+      if (picked) basket.add(this.ingredientKey(picked));
+
+      // The run stops the moment the job is done, so later steps never run.
+      if (pos.x === goal.x && pos.y === goal.y && this.recipeComplete(level, basket)) {
+        return { pos, reachedGem: true, stepIndex: i, collected: basket };
       }
     }
 
-    return { pos, blocked: null };
+    return { pos, blocked: null, collected: basket };
+  }
+
+  // What the robot should head for next: the closest ingredient still on the
+  // board, or the blender once the recipe is complete.
+  nextTarget(level, from, collected) {
+    const remaining = this.remainingIngredients(level, collected);
+    if (!remaining.length) {
+      return { square: this.goalSquare(level), ingredient: null };
+    }
+
+    let best = null;
+    for (const ing of remaining) {
+      const path = this.solveBFS(level, from, ing);
+      if (!path.length && !(from.x === ing.x && from.y === ing.y)) continue;
+      if (!best || path.length < best.path.length) best = { ingredient: ing, path };
+    }
+
+    if (!best) return { square: this.goalSquare(level), ingredient: null };
+    return { square: best.ingredient, ingredient: best.ingredient };
   }
 
   showHint() {
@@ -742,9 +1039,9 @@ class GameController {
       return;
     }
 
-    if (this.robotPos.x === lvl.gem.x && this.robotPos.y === lvl.gem.y) {
-      this.showMessage("You already found the gem! 💎", "info");
-      say("You already found the gem!");
+    if (this.hasWon()) {
+      this.showMessage("All done here! 🎉", "info");
+      say("All done here!");
       return;
     }
 
@@ -755,13 +1052,16 @@ class GameController {
 
     if (plan.reachedGem) {
       const stepNumber = this.executionStep + plan.stepIndex + 1;
-      this.showMessage(`Your plan reaches the gem on step ${stepNumber}! Press ▶ Run.`, "info");
-      say("Your plan reaches the gem! Press run!");
+      const prize = this.isRecipeLevel(lvl) ? "blends the smoothie" : "reaches the gem";
+      this.showMessage(`Your plan ${prize} on step ${stepNumber}! Press ▶ Run.`, "info");
+      say(`Your plan ${prize}! Press run!`);
       return;
     }
 
-    // Best route onwards from the square the current plan leaves the robot on.
-    const route = this.solveBFS(lvl, plan.pos);
+    // Best route onwards from the square the current plan leaves the robot on,
+    // heading for the next ingredient before the blender.
+    const target = this.nextTarget(lvl, plan.pos, plan.collected);
+    const route = this.solveBFS(lvl, plan.pos, target.square);
 
     if (plan.blocked) {
       const stepNumber = this.executionStep + plan.stepIndex + 1;
@@ -784,7 +1084,10 @@ class GameController {
     }
 
     const nextDir = route[0];
-    const togo = `${route.length} ${plural(route.length)} to the gem.`;
+    const goal = target.ingredient
+      ? `${target.ingredient.emoji} ${target.ingredient.name}`
+      : (this.isRecipeLevel(lvl) ? "the blender" : "the gem");
+    const togo = `${route.length} ${plural(route.length)} to ${goal}.`;
 
     if (pending.length === 0) {
       const atStart = this.robotPos.x === lvl.start.x && this.robotPos.y === lvl.start.y;
@@ -803,7 +1106,7 @@ class GameController {
 
   // Shortest route to the gem from any square (defaults to the level start),
   // so hints can be given from wherever the robot has walked to.
-  solveBFS(level, from = level.start) {
+  solveBFS(level, from = level.start, target = this.goalSquare(level)) {
     const key = (x, y) => `${x},${y}`;
     const blockerSet = new Set(level.blockers.map(b => key(b.x, b.y)));
     const pitSet = new Set(level.pits.map(p => key(p.x, p.y)));
@@ -813,7 +1116,7 @@ class GameController {
 
     while (queue.length > 0) {
       const cur = queue.shift();
-      if (cur.x === level.gem.x && cur.y === level.gem.y) {
+      if (cur.x === target.x && cur.y === target.y) {
         return cur.path;
       }
 
@@ -921,9 +1224,24 @@ class GameController {
     Sound.playClick();
     const modal = document.getElementById('level-select-modal');
     const gridEl = document.getElementById('level-select-grid');
+    this.renderModeTabs();
     gridEl.innerHTML = "";
 
-    LEVELS.forEach(lvl => {
+    const titleEl = document.getElementById('level-select-title');
+    const subtitleEl = document.getElementById('level-select-subtitle');
+    const levels = this.getLevelSet();
+    if (titleEl) {
+      titleEl.textContent = this.mode === 'smoothie'
+        ? `Pick a Recipe (1 to ${levels.length})`
+        : `Select a Level (1 to ${levels.length})`;
+    }
+    if (subtitleEl) {
+      subtitleEl.textContent = this.mode === 'smoothie'
+        ? "Collect every ingredient, then take it to the blender!"
+        : "New customizations unlock every 5 levels!";
+    }
+
+    levels.forEach(lvl => {
       const card = document.createElement('div');
       const isUnlocked = lvl.id <= this.maxUnlockedLevel;
       const isCurrent = lvl.id === (this.currentLevelIdx + 1);
@@ -944,10 +1262,14 @@ class GameController {
         starHTML = `<div class="level-card-lock">🔒</div>`;
       }
 
+      const meta = this.isRecipeLevel(lvl)
+        ? `${this.ingredientsOf(lvl).map(i => i.emoji).join('')}`
+        : `${lvl.width}x${lvl.height}`;
+
       card.innerHTML = `
         <div class="level-card-num">${lvl.id}</div>
         <div class="level-card-title">${lvl.title}</div>
-        <div class="level-card-meta">${lvl.width}x${lvl.height}</div>
+        <div class="level-card-meta">${meta}</div>
         ${starHTML}
       `;
 
@@ -962,6 +1284,31 @@ class GameController {
     });
 
     modal.classList.add('open');
+  }
+
+  // Two ways to play, chosen from the level screen. Each keeps its own stars.
+  renderModeTabs() {
+    const tabsEl = document.getElementById('mode-tabs');
+    if (!tabsEl) return;
+
+    const modes = [
+      { id: 'classic', label: '🤖 Classic Quest', levels: LEVELS.length },
+      { id: 'smoothie', label: '🥤 Smoothie Remix', levels: SMOOTHIE_LEVELS.length }
+    ];
+
+    tabsEl.innerHTML = "";
+    modes.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = `mode-tab ${this.mode === m.id ? 'active' : ''}`;
+      btn.innerHTML = `<span>${m.label}</span><span class="mode-tab-count">${m.levels} levels</span>`;
+      btn.onclick = () => {
+        if (this.mode === m.id) return;
+        Sound.playClick();
+        this.setMode(m.id);
+        this.openLevelSelector();
+      };
+      tabsEl.appendChild(btn);
+    });
   }
 
   // ==========================================

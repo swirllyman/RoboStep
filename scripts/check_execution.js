@@ -49,6 +49,9 @@ async function setup(page) {
   await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => {
     localStorage.setItem('robostep_max_level', '50');
+    // These checks are about the classic quest; be explicit so a stored
+    // Smoothie Remix mode can never change what they load.
+    localStorage.setItem('robostep_mode', 'classic');
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.grid-cell');

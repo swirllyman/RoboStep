@@ -49,6 +49,15 @@ const VIEWPORTS = [
 const TEST_LEVEL = 50;
 const TEST_COMMANDS = 8;
 
+// Smoothie Remix adds a recipe card above the board, so the tightest screens
+// are re-checked in that mode with its busiest recipe.
+const SMOOTHIE_VIEWPORTS = [
+  { name: 'Galaxy Fold (portrait)', width: 320, height: 653 },
+  { name: 'iPhone SE (portrait)', width: 375, height: 667 },
+  { name: 'iPhone 12 + browser UI', width: 390, height: 664 },
+  { name: 'Small phone (landscape)', width: 568, height: 320 }
+];
+
 async function measure(page) {
   return page.evaluate(() => {
     const doc = document.documentElement;
@@ -87,8 +96,12 @@ async function measure(page) {
   );
 
   let failures = 0;
+  const runs = [
+    ...VIEWPORTS.map(vp => ({ vp, mode: 'classic' })),
+    ...SMOOTHIE_VIEWPORTS.map(vp => ({ vp, mode: 'smoothie' }))
+  ];
 
-  for (const vp of VIEWPORTS) {
+  for (const { vp, mode } of runs) {
     const context = await browser.newContext({
       viewport: { width: vp.width, height: vp.height },
       isMobile: vp.width < 820,
@@ -98,10 +111,14 @@ async function measure(page) {
 
     // The web-font stylesheet can stall the load event; layout only needs the DOM.
     await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
-    await page.evaluate((lvl) => {
+    await page.evaluate(({ lvl, mode }) => {
       localStorage.setItem('robostep_max_level', '50');
       localStorage.setItem('robostep_last_played', String(lvl));
-    }, TEST_LEVEL);
+      localStorage.setItem('robostep_mode', mode);
+      // The last recipe is the busiest board in Smoothie Remix.
+      localStorage.setItem('robostep_smoothie_max_level', '12');
+      localStorage.setItem('robostep_smoothie_last_played', '12');
+    }, { lvl: TEST_LEVEL, mode });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.grid-cell');
 
@@ -126,7 +143,8 @@ async function measure(page) {
       }
     });
 
-    const label = `${vp.name} (${vp.width}x${vp.height})`.padEnd(34);
+    const modeTag = mode === 'smoothie' ? '🥤 ' : '';
+    const label = `${modeTag}${vp.name} (${vp.width}x${vp.height})`.padEnd(36);
     if (problems.length) {
       failures++;
       console.log(`FAIL  ${label} ${problems.join('; ')}`);

@@ -212,6 +212,120 @@ class SoundEngine {
     });
   }
 
+  // Ingredient picked up: a bright rising plink that climbs with each one
+  // collected, so the recipe audibly fills up.
+  playPickup(collectedCount = 1) {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const base = this.stepScale[Math.min(collectedCount + 3, this.stepScale.length - 1)];
+    [base, base * 1.5].forEach((freq, idx) => {
+      const now = this.ctx.currentTime + idx * 0.06;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.25);
+    });
+  }
+
+  // The blender whirring: filtered noise plus a wobbling motor hum.
+  playBlend(duration = 1.0) {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+
+    // Motor: a low sawtooth that wobbles as the blades bite.
+    const motor = this.ctx.createOscillator();
+    const motorGain = this.ctx.createGain();
+    motor.type = 'sawtooth';
+    motor.frequency.setValueAtTime(90, now);
+    motor.frequency.linearRampToValueAtTime(150, now + duration * 0.6);
+    motor.frequency.linearRampToValueAtTime(110, now + duration);
+
+    const wobble = this.ctx.createOscillator();
+    const wobbleGain = this.ctx.createGain();
+    wobble.type = 'sine';
+    wobble.frequency.setValueAtTime(18, now);
+    wobbleGain.gain.setValueAtTime(30, now);
+    wobble.connect(wobbleGain);
+    wobbleGain.connect(motor.frequency);
+
+    motorGain.gain.setValueAtTime(0.0001, now);
+    motorGain.gain.exponentialRampToValueAtTime(0.12, now + 0.08);
+    motorGain.gain.setValueAtTime(0.12, now + duration - 0.15);
+    motorGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    const lowpass = this.ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.setValueAtTime(900, now);
+
+    motor.connect(motorGain);
+    motorGain.connect(lowpass);
+    lowpass.connect(this.ctx.destination);
+
+    motor.start(now);
+    wobble.start(now);
+    motor.stop(now + duration + 0.05);
+    wobble.stop(now + duration + 0.05);
+  }
+
+  // Drinking it down: a rising slurp, then a happy little "mmm".
+  playSlurp() {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+
+    const slurp = this.ctx.createOscillator();
+    const slurpGain = this.ctx.createGain();
+    slurp.type = 'sawtooth';
+    slurp.frequency.setValueAtTime(160, now);
+    slurp.frequency.exponentialRampToValueAtTime(680, now + 0.45);
+
+    const bandpass = this.ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.setValueAtTime(700, now);
+    bandpass.Q.setValueAtTime(6, now);
+
+    slurpGain.gain.setValueAtTime(0.14, now);
+    slurpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    slurp.connect(bandpass);
+    bandpass.connect(slurpGain);
+    slurpGain.connect(this.ctx.destination);
+    slurp.start(now);
+    slurp.stop(now + 0.55);
+
+    // "Mmm, yummy!"
+    [523.25, 659.25].forEach((freq, idx) => {
+      const start = now + 0.5 + idx * 0.14;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.2, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.3);
+    });
+  }
+
   // Unlocking new customization fanfare
   playUnlock() {
     if (this.muted) return;

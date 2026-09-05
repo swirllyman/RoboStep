@@ -43,6 +43,28 @@ The grid expands slowly as the player learns and advances:
 
 ---
 
+## 🥤 Smoothie Remix Mode (12 Recipes)
+
+A second way to play, picked from the **🗺️ Levels** screen — tap **🥤 Smoothie Remix**.
+
+Same robot, same four arrows, one extra rule: **collect every ingredient on the recipe card, then take them to the blender.**
+
+- **Recipe card**: sits above the board and ticks each ingredient off the moment the robot rolls over it, so kids can count what's still missing.
+- **The blender fills up**: the jug on the goal square pours in a little more colour with every ingredient collected — a progress bar you can see from across the room.
+- **Arriving empty-handed does nothing**: the robot can roll straight over the blender, and it simply says how many ingredients are still needed. The smoothie only gets made when the recipe is complete.
+- **Then the good bit**: the blender whirs, the smoothie is served, and the robot drinks the whole thing. *Slurp! So yummy!* 🥤
+- **Hints know the recipe**: 💡 Hint routes to the nearest ingredient still on the board by name ("2 steps to 🫐 Blueberry"), and only points at the blender once everything is collected.
+- **Separate progress**: Smoothie Remix keeps its own stars and unlocks, so it never touches your Classic Quest progress.
+
+| Recipes | Ingredients | Grid | What's new |
+| :--- | :--- | :--- | :--- |
+| 1–3: Berry Blast, Banana Buzz, Tropical Sunrise | 2–3 | 4x4 | Collect, then blend |
+| 4–6: Green Machine, Peachy Keen, Melon Splash | 3 | 5x5 | Boulders, and a blender you can roll over |
+| 7–9: Choco Monkey, Dragon Dream, Very Berry Deluxe | 4–5 | 6x6 | Holes in the kitchen floor |
+| 10–12: Citrus Zing, Rainbow Remix, Master Blender | 4–5 | 7x7 | Big kitchens and long routes |
+
+---
+
 ## 🎨 Unlockable Robot Customizations (Every 5 Levels)
 
 Visit the **Workshop (Robot Dressing Room)** anytime to mix and match unlocked parts:
@@ -93,9 +115,11 @@ The whole game is designed to fit in a single screen with **no scrolling at all*
 Run the regression checks (Playwright required for the first two) with:
 
 ```powershell
-node scripts/check_layout.js      # one-screen layout across 13 viewports
+node scripts/check_layout.js      # one-screen layout across every viewport
 node scripts/check_execution.js   # the robot always obeys the program on screen
-node scripts/verify_levels.js     # all 50 levels are solvable
+node scripts/check_smoothie.js    # Smoothie Remix collects, blends and slurps
+node scripts/verify_levels.js     # all 50 classic levels are solvable
+node scripts/verify_smoothie.js   # all 12 recipes are collectable, pars are optimal
 node scripts/test_web.js          # assets and page wiring
 ```
 

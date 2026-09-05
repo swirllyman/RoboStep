@@ -54,6 +54,9 @@
           <div class="par-pill" id="level-par">Target: 2 steps</div>
         </div>
 
+        <!-- Recipe card: only shown for Smoothie Remix levels -->
+        <div class="recipe-bar" id="recipe-bar" hidden></div>
+
         <!-- Dynamic Grid Viewport -->
         <div class="grid-viewport">
           <div id="game-grid" class="grid-container world-meadow">
@@ -199,8 +202,12 @@
   <div class="modal-overlay" id="level-select-modal">
     <div class="modal-card wardrobe-card">
       <button class="modal-close-btn" onclick="window.game.closeModal('level-select-modal')">×</button>
-      <h2 style="margin-bottom: 8px; color: #1E293B;">Select a Level (1 to 50)</h2>
-      <p style="color: #64748B; font-size: 0.85rem; font-weight: 700; margin-bottom: 12px;">
+      <h2 id="level-select-title" style="margin-bottom: 8px; color: #1E293B;">Select a Level (1 to 50)</h2>
+
+      <!-- Game mode picker: Classic Quest / Smoothie Remix -->
+      <div class="mode-tabs" id="mode-tabs"></div>
+
+      <p id="level-select-subtitle" style="color: #64748B; font-size: 0.85rem; font-weight: 700; margin-bottom: 12px;">
         New customizations unlock every 5 levels!
       </p>
       <div class="level-select-grid" id="level-select-grid">
@@ -311,6 +318,7 @@
   <script src="js/voice.js"></script>
   <script src="js/robotRenderer.js"></script>
   <script src="js/levels.js"></script>
+  <script src="js/smoothieLevels.js"></script>
   <script src="js/customizer.js"></script>
   <script src="js/game.js"></script>
 
