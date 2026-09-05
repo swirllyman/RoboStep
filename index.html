@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>RoboStep: Gem Quest - Logic & Counting Game for Kids</title>
+  <!-- Google Fonts: Nunito -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Confetti Canvas -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <div id="app-container">
+
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <div class="logo-group">
+        <div class="logo-icon">🤖</div>
+        <div class="logo-text">
+          <h1>RoboStep</h1>
+          <span class="level-badge" id="level-world">Sunny Meadow</span>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button class="pill-btn accent" id="btn-wardrobe" title="Customize Robot">
+          <span>🎨</span> Workshop
+        </button>
+        <button class="pill-btn" id="btn-voice" title="Robot Voice Settings">
+          <span>🎙️</span> Voice
+        </button>
+        <button class="pill-btn" id="btn-levels" title="Select Level">
+          <span>🗺️</span> Levels
+        </button>
+        <button class="pill-btn" id="btn-sound" title="Toggle Sound">
+          🔊 Sound
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Game Arena & Controls -->
+    <main class="game-stage">
+
+      <!-- Left: Puzzle Grid Arena -->
+      <section class="arena-panel">
+        <div class="level-banner">
+          <div class="level-title-group">
+            <h2 id="level-title">Level 1: First Steps</h2>
+          </div>
+          <div class="par-pill" id="level-par">Target: 2 steps</div>
+        </div>
+
+        <!-- Dynamic Grid Viewport -->
+        <div class="grid-viewport">
+          <div id="game-grid" class="grid-container world-meadow">
+            <!-- Grid cells generated dynamically by game.js -->
+          </div>
+        </div>
+
+        <!-- Status & Friendly Help -->
+        <div class="status-bar">
+          <div id="status-message" class="status-message"></div>
+          <div class="tip-box">
+            <span>💡</span> <span id="tip-text">Tap arrows to give your robot instructions!</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Kid-Friendly Coding Panel -->
+      <section class="controls-panel">
+
+        <!-- Command Sequence Tape -->
+        <div class="tape-header">
+          <div class="tape-title-group">
+            <h3>Instruction Sequence</h3>
+            <span class="badge-counter" id="step-count-badge">0 Steps</span>
+          </div>
+          <button class="tape-clear-btn" id="btn-clear-tape" title="Clear all instructions">
+            🗑️ Clear
+          </button>
+        </div>
+        <div class="command-tape-viewport" id="command-tape">
+          <!-- Command chips generated dynamically -->
+        </div>
+
+        <!-- Primary Action Playback Bar -->
+        <div class="action-bar">
+          <button class="action-btn btn-run" id="btn-run" title="Run all instructions">
+            <span>▶</span> Run
+          </button>
+          <button class="action-btn btn-step" id="btn-step" title="Step one instruction at a time">
+            <span>⏭</span> Step
+          </button>
+          <button class="action-btn btn-reset" id="btn-reset" title="Reset robot position">
+            <span>↺</span> Reset
+          </button>
+        </div>
+
+        <!-- Directional Keypad -->
+        <div class="dpad-container">
+          <button class="arrow-btn" id="btn-up" title="Move Up">
+            <span class="btn-icon">⬆️</span>
+            <span class="btn-text">Up</span>
+          </button>
+          <button class="arrow-btn" id="btn-left" title="Move Left">
+            <span class="btn-icon">⬅️</span>
+            <span class="btn-text">Left</span>
+          </button>
+          <button class="arrow-btn" id="btn-down" title="Move Down">
+            <span class="btn-icon">⬇️</span>
+            <span class="btn-text">Down</span>
+          </button>
+          <button class="arrow-btn" id="btn-right" title="Move Right">
+            <span class="btn-icon">➡️</span>
+            <span class="btn-text">Right</span>
+          </button>
+        </div>
+
+        <!-- Secondary Control Tools -->
+        <div class="secondary-bar">
+          <button class="sec-btn" id="btn-undo" title="Remove last instruction">⌫ Undo</button>
+          <button class="sec-btn" id="btn-clear" title="Clear all instructions">🗑️ Clear</button>
+          <button class="sec-btn" id="btn-hint" title="Show helpful hint">💡 Hint</button>
+          <button class="sec-btn" id="btn-speed" title="Adjust speed">🐇 Normal</button>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- MODAL: Level Completed (Victory) -->
+  <div class="modal-overlay" id="win-modal">
+    <div class="modal-card">
+      <div class="win-stars" id="win-stars">
+        <span class="star earned">⭐</span>
+        <span class="star earned">⭐</span>
+        <span class="star earned">⭐</span>
+      </div>
+      <h2 id="win-title">Awesome Job! 💎</h2>
+      <p id="win-stats" style="margin: 8px 0; color: #475569; font-weight: 700;"></p>
+      <div class="modal-btn-row">
+        <button class="pill-btn" onclick="window.game.closeModal('win-modal'); window.game.resetRobot();">Replay ↺</button>
+        <button class="pill-btn accent" id="win-btn-next">Next Level ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Milestone Customization Unlock (Every 5 Levels) -->
+  <div class="modal-overlay" id="milestone-modal">
+    <div class="modal-card">
+      <h2 id="milestone-title" style="color: #7C3AED; margin-bottom: 6px;">New Robot Part Unlocked! 🎉</h2>
+      <p id="milestone-desc" style="color: #475569; font-size: 0.9rem; font-weight: 700; margin-bottom: 14px;"></p>
+      <div id="milestone-preview" style="display: flex; justify-content: center; margin: 10px 0;"></div>
+      <div class="modal-btn-row">
+        <button class="pill-btn accent" id="milestone-equip-btn">Equip Now! ✨</button>
+        <button class="pill-btn" id="milestone-continue-btn">Continue ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Robot Wardrobe / Workshop -->
+  <div class="modal-overlay" id="wardrobe-modal">
+    <div class="modal-card wardrobe-card">
+      <button class="modal-close-btn" onclick="window.game.closeModal('wardrobe-modal')">×</button>
+      <h2 style="margin-bottom: 12px; color: #1E293B;">🤖 Robot Dressing Room</h2>
+      
+      <!-- Live Robot Preview -->
+      <div class="wardrobe-preview-box" id="wardrobe-robot-preview">
+        <!-- Live SVG Robot -->
+      </div>
+
+      <!-- Categories Tabs -->
+      <div class="tabs-row" id="wardrobe-tabs">
+        <!-- Generated by customizer.js -->
+      </div>
+
+      <!-- Items Grid -->
+      <div class="items-grid" id="wardrobe-items-grid">
+        <!-- Item cards -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Level Selector -->
+  <div class="modal-overlay" id="level-select-modal">
+    <div class="modal-card wardrobe-card">
+      <button class="modal-close-btn" onclick="window.game.closeModal('level-select-modal')">×</button>
+      <h2 style="margin-bottom: 8px; color: #1E293B;">Select a Level (1 to 50)</h2>
+      <p style="color: #64748B; font-size: 0.85rem; font-weight: 700; margin-bottom: 12px;">
+        New customizations unlock every 5 levels!
+      </p>
+      <div class="level-select-grid" id="level-select-grid">
+        <!-- 50 level cards -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Voice Studio & Speech Customizer -->
+  <div class="modal-overlay" id="voice-modal">
+    <div class="modal-card voice-card">
+      <button class="modal-close-btn" onclick="window.game.closeModal('voice-modal')">×</button>
+      <h2 style="color: #1E293B; margin-bottom: 4px;">🎙️ Robot Voice Studio</h2>
+      <p style="color: #64748B; font-size: 0.85rem; font-weight: 700; margin-bottom: 14px;">
+        Tune your robot's voice pitch, speed, and speaking style to make it sound extra kid-friendly!
+      </p>
+
+      <!-- Presets Row -->
+      <div class="voice-presets-row">
+        <button class="voice-preset-btn" id="preset-cute">🤖 Cute Robot</button>
+        <button class="voice-preset-btn" id="preset-kid">🧸 Playful Kid</button>
+        <button class="voice-preset-btn" id="preset-scifi">🚀 Sci-Fi Droid</button>
+        <button class="voice-preset-btn" id="preset-slow">🐢 Slow & Clear</button>
+      </div>
+
+      <!-- Controls Form -->
+      <div class="voice-controls-grid">
+
+        <!-- Voice Selector Dropdown -->
+        <div class="control-row">
+          <label for="voice-select">Robot Voice Actor:</label>
+          <select id="voice-select" class="voice-dropdown"></select>
+        </div>
+
+        <!-- Pitch Slider -->
+        <div class="control-row">
+          <div class="slider-header">
+            <label for="voice-pitch">Voice Pitch:</label>
+            <span class="slider-val-badge" id="voice-pitch-val">1.45 (Cute)</span>
+          </div>
+          <input type="range" id="voice-pitch" min="0.5" max="2.0" step="0.05" value="1.45" />
+          <div class="slider-ends"><span>Deep / Giant</span><span>Cute / Squeaky</span></div>
+        </div>
+
+        <!-- Speed Slider -->
+        <div class="control-row">
+          <div class="slider-header">
+            <label for="voice-rate">Speaking Speed:</label>
+            <span class="slider-val-badge" id="voice-rate-val">1.10x</span>
+          </div>
+          <input type="range" id="voice-rate" min="0.5" max="1.8" step="0.05" value="1.10" />
+          <div class="slider-ends"><span>Slow</span><span>Fast</span></div>
+        </div>
+
+        <!-- Volume Slider -->
+        <div class="control-row">
+          <div class="slider-header">
+            <label for="voice-volume">Volume:</label>
+            <span class="slider-val-badge" id="voice-volume-val">100%</span>
+          </div>
+          <input type="range" id="voice-volume" min="0.0" max="1.0" step="0.05" value="1.0" />
+        </div>
+
+        <!-- Step Spoken Style -->
+        <div class="control-row">
+          <label for="voice-mode">When Moving, Say:</label>
+          <select id="voice-mode" class="voice-dropdown">
+            <option value="both">Number & Direction (e.g. "One, Up! Two, Right!")</option>
+            <option value="numbers">Counting Numbers Only (e.g. "One! Two! Three!")</option>
+            <option value="directions">Directions Only (e.g. "Up! Right! Down!")</option>
+          </select>
+        </div>
+
+        <!-- Checkbox Options -->
+        <div class="voice-toggles-grid">
+          <label class="toggle-checkbox">
+            <input type="checkbox" id="voice-chk-buttons" checked />
+            <span>Speak Buttons (Up, Down, Run...)</span>
+          </label>
+          <label class="toggle-checkbox">
+            <input type="checkbox" id="voice-chk-steps" checked />
+            <span>Count Steps Aloud</span>
+          </label>
+          <label class="toggle-checkbox">
+            <input type="checkbox" id="voice-chk-events" checked />
+            <span>Encouragements, Bumps & Bonks</span>
+          </label>
+          <label class="toggle-checkbox">
+            <input type="checkbox" id="voice-chk-titles" checked />
+            <span>Announce Level Titles</span>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="modal-btn-row" style="margin-top: 18px;">
+        <button class="pill-btn accent" id="voice-btn-test">🔊 Test Voice</button>
+        <button class="pill-btn" id="voice-btn-reset">↺ Reset Defaults</button>
+        <button class="pill-btn" onclick="window.game.closeModal('voice-modal')">✓ Lock In & Close</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Game Scripts -->
+  <script src="js/audio.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/robotRenderer.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/customizer.js"></script>
+  <script src="js/game.js"></script>
+
+</body>
+</html>

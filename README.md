@@ -1,0 +1,86 @@
+# 🤖 RoboStep: Gem Quest
+
+**An educational robot instruction logic & counting puzzle game for kids!**
+
+Help your friendly robot navigate through expanding worlds to collect the shiny gem! Plan sequences of directional commands (Up, Down, Left, Right), watch your robot execute them step-by-step, and unlock awesome new robot customizations every 5 levels!
+
+---
+
+## 🎮 How to Play
+
+1. **Count & Plan**: Look at your robot and count how many tiles it needs to move to reach the Gem.
+2. **Give Instructions**: Tap the chunky directional arrow buttons (**⬆️ Up**, **⬇️ Down**, **⬅️ Left**, **➡️ Right**) or use your keyboard arrow keys / WASD.
+   - Each instruction adds a numbered step card (1, 2, 3...) so kids can practice 1-to-1 counting.
+3. **Execute**:
+   - **▶ Run**: Watch the robot execute the entire program automatically!
+   - **⏭ Step**: Execute just one instruction at a time so parents and kids can count together ("One! Two! Three!").
+   - **↺ Reset**: Returns the robot to the start position without losing your program, so you can debug and tweak your steps.
+   - **⌫ Undo / 🗑️ Clear**: Remove the last step or start fresh.
+   - **💡 Hint**: Gives you a nudge in the right direction if you get stuck.
+   - **🐢 / 🐇 / ⚡ Speed**: Adjust playback speed from slow turtle to lightning fast.
+
+4. **🎙️ Voice Studio (Fully Customizable)**:
+   - Tap the **🎙️ Voice** button in the top bar to open the **Robot Voice Studio**.
+   - **Voice Pitch**: Adjust slider (0.5 to 2.0). Higher pitch (~1.45) sounds like a cute cartoon robot!
+   - **Speaking Speed**: Adjust pace (0.5x to 1.8x) to match your kid's listening speed.
+   - **Speaking Style**: Choose between *"Number & Direction"* (e.g. "One, Up! Two, Right!"), *"Counting Only"* ("One! Two! Three!"), or *"Directions Only"* ("Up! Right!").
+   - **Voice Presets**: Instant one-click presets like 🤖 *Cute Robot*, 🧸 *Playful Kid*, 🚀 *Sci-Fi Droid*, or 🐢 *Slow & Clear*.
+   - **Settings Lock-in**: All voice adjustments auto-save in `localStorage`, so your favorite voice settings stay locked in!
+
+---
+
+## 🗺️ 50 Progressive Levels & Worlds
+
+The grid expands slowly as the player learns and advances:
+
+| Worlds | Levels | Grid Size | Hazards & Challenges |
+| :--- | :--- | :--- | :--- |
+| **World 1: Sunny Meadow** | Levels 1–10 | **3x3 to 4x4** | Fundamentals of Up, Down, Left, Right & counting 1–6 steps |
+| **World 2: Rocky Canyon** | Levels 11–20 | **4x4 to 5x5** | Solid rock boulders 🪨 to steer around |
+| **World 3: Danger Chasm** | Levels 21–30 | **5x5 to 6x6** | Deep hazard pits 🕳️ (don't fall in!) and narrow bridges |
+| **World 4: Circuit City** | Levels 31–40 | **6x6 to 7x7** | Winding corridors, high-tech mazes & switchbacks |
+| **World 5: Master Academy** | Levels 41–50 | **7x7 to 8x8** | Grand master puzzle arenas for champion coders |
+
+---
+
+## 🎨 Unlockable Robot Customizations (Every 5 Levels)
+
+Visit the **Workshop (Robot Dressing Room)** anytime to mix and match unlocked parts:
+
+- **Level 5**: 🎨 **Lime Mint & Bubblegum Pink** paint coats
+- **Level 10**: 🚁 **Propeller Cap** (with real spinning propeller animation!)
+- **Level 15**: 👀 **Star Eyes & Heart Visor**
+- **Level 20**: 🏆 **Golden Knight Armor, Monster Wheels & Pogo Spring**
+- **Level 25**: 🧑‍🚀 **Astronaut Bubble Helmet & Cool Sunglasses**
+- **Level 30**: 🚀 **Rocket Jet Thrusters** (with animated flame exhaust!)
+- **Level 35**: 🏴‍☠️ **Pirate Captain Hat** (with skull & crossbones)
+- **Level 40**: 🌈 **Rainbow Hologram & Cyber Neon** paint + **Cyber Visor**
+- **Level 45**: 🧙‍♂️ **Mystical Wizard Hat**
+- **Level 50**: 👑 **Royal Golden Crown & Royal Hover Chariot** (Grand Champion!)
+
+---
+
+## 🚀 How to Run
+
+Because the game is built with zero external dependencies and self-contained procedural Web Audio, you can run it immediately in any browser:
+
+### Option 1: Direct File Open
+Simply double-click `index.html` in your file explorer, or drag `index.html` into Chrome, Edge, Safari, or Firefox!
+
+### Option 2: Local HTTP Server (Python)
+```powershell
+python -m http.server 8080
+```
+Then open [http://localhost:8080](http://localhost:8080) in your browser.
+
+### Option 3: Local HTTP Server (Node)
+```powershell
+node scripts/test_web.js
+```
+
+---
+
+## 🎹 Keyboard Controls
+- **Arrow Keys** or **W, A, S, D**: Add directional command
+- **Spacebar**: Run / Reset toggle
+- **Backspace**: Undo last instruction
