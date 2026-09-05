@@ -326,6 +326,31 @@ class SoundEngine {
     });
   }
 
+  // Hint: a friendly two-note "psst, look here" chime
+  playHint() {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    [659.25, 987.77].forEach((freq, idx) => {
+      const now = this.ctx.currentTime + idx * 0.11;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.32);
+    });
+  }
+
   // Unlocking new customization fanfare
   playUnlock() {
     if (this.muted) return;

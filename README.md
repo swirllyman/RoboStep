@@ -16,7 +16,14 @@ Help your friendly robot navigate through expanding worlds to collect the shiny 
    - **⏭ Step**: Execute just one instruction at a time so parents and kids can count together ("One! Two! Three!").
    - **↺ Reset**: Returns the robot to the start position without losing your program, so you can debug and tweak your steps.
    - **⌫ Undo / 🗑️ Clear**: Remove the last step or start fresh.
-   - **💡 Hint**: Gives you a nudge in the right direction if you get stuck.
+   - **💡 Hint**: Draws the answer on the board rather than writing it out, so it works before a child can read:
+     - a big bouncing **arrow** on the very next square to move to,
+     - **footsteps** flowing along the rest of the way,
+     - a **green ring** around whatever to head for (the gem, or the next ingredient),
+     - the **button to press** pulses with a halo around it,
+     - and if the plan goes wrong: the **step card** that causes it shakes red, the rock or pit gets a red ✕, and a blue arrow shows a way that works instead.
+
+     The hint clears itself as soon as the player acts on it. The written line and the spoken hint are extras for grown-ups.
    - **🐢 / 🐇 / ⚡ Speed**: Adjust playback speed from slow turtle to lightning fast.
 
 4. **🎙️ Voice Studio (Fully Customizable)**:

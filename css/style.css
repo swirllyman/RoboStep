@@ -1701,3 +1701,169 @@ input[type="range"] {
     animation: none;
   }
 }
+
+/* ==========================================
+   VISUAL HINTS
+   A hint has to work for a player who cannot read a word of it, so it is
+   drawn on the board: where to go next, the way onwards, what to avoid, and
+   which button to press.
+   ========================================== */
+
+/* Every marker sits over its tile but under the robot */
+.hint-mark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* The very next move: a big bouncing arrow pointing the way */
+.hint-next {
+  z-index: 7;
+  animation: hint-bounce 0.85s infinite ease-in-out;
+}
+
+.hint-next .icon {
+  width: 64%;
+  height: 64%;
+  fill: #2563EB;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.95))
+          drop-shadow(0 2px 3px rgba(37, 99, 235, 0.45));
+}
+
+.hint-next.dir-right .icon { transform: rotate(90deg); }
+.hint-next.dir-down .icon { transform: rotate(180deg); }
+.hint-next.dir-left .icon { transform: rotate(270deg); }
+
+/* The rest of the way: footsteps flowing towards the goal */
+.hint-dot::before {
+  content: '';
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  background: #2563EB;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9);
+  opacity: 0.55;
+  animation: hint-flow 1.5s infinite ease-in-out;
+  animation-delay: calc(var(--i, 0) * 0.12s);
+}
+
+/* Squares the queued program already covers */
+.hint-plan::before {
+  content: '';
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: #94A3B8;
+  opacity: 0.5;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
+}
+
+.hint-plan.good::before {
+  background: #22C55E;
+  opacity: 0.85;
+  animation: hint-flow 1.2s infinite ease-in-out;
+  animation-delay: calc(var(--i, 0) * 0.1s);
+}
+
+/* What to head for: a pulsing ring around the prize */
+.hint-goal {
+  animation: hint-target 1.1s infinite ease-in-out;
+  z-index: 4;
+}
+
+/* Trouble ahead */
+.hint-danger {
+  animation: hint-danger-pulse 0.7s infinite alternate ease-in-out;
+}
+
+.hint-stop {
+  z-index: 8;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #EF4444;
+  text-shadow: 0 0 6px #FFFFFF, 0 0 6px #FFFFFF, 0 2px 4px rgba(0, 0, 0, 0.35);
+  animation: hint-bounce 0.85s infinite ease-in-out;
+}
+
+.hint-warn {
+  box-shadow: inset 0 0 0 3px #F59E0B;
+}
+
+/* The step of the program that goes wrong */
+.command-card.hint-bad {
+  border-color: #EF4444 !important;
+  box-shadow: 0 0 0 3px #FECACA, 0 2px 0 #EF4444 !important;
+  animation: hint-shake 0.5s ease-in-out 2;
+}
+
+/* The button to press next */
+.press-me {
+  animation: hint-press 0.9s infinite ease-in-out,
+             hint-halo 0.9s infinite ease-out;
+  z-index: 2;
+}
+
+/* A halo around the button to press, so it is obvious which one is meant */
+.press-me {
+  outline: 3px solid rgba(37, 99, 235, 0.9);
+  outline-offset: 3px;
+}
+
+@keyframes hint-bounce {
+  0%, 100% { transform: translateY(-8%) scale(1); }
+  50% { transform: translateY(8%) scale(1.1); }
+}
+
+@keyframes hint-flow {
+  0%, 100% { opacity: 0.45; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes hint-target {
+  0%, 100% { box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.55); }
+  50% { box-shadow: inset 0 0 0 6px rgba(34, 197, 94, 0.95); }
+}
+
+@keyframes hint-danger-pulse {
+  from { box-shadow: inset 0 0 0 3px rgba(239, 68, 68, 0.5); }
+  to { box-shadow: inset 0 0 0 6px rgba(239, 68, 68, 0.95); }
+}
+
+@keyframes hint-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px) rotate(-4deg); }
+  75% { transform: translateX(3px) rotate(4deg); }
+}
+
+@keyframes hint-press {
+  0%, 100% { transform: translateY(0) scale(1); filter: brightness(1); }
+  50% { transform: translateY(-3px) scale(1.07); filter: brightness(1.14); }
+}
+
+@keyframes hint-halo {
+  0% { outline-color: rgba(37, 99, 235, 0.95); outline-offset: 2px; }
+  100% { outline-color: rgba(37, 99, 235, 0); outline-offset: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint-next,
+  .hint-dot::before,
+  .hint-plan.good::before,
+  .hint-goal,
+  .hint-danger,
+  .hint-stop,
+  .command-card.hint-bad,
+  .press-me {
+    animation: none;
+  }
+
+  .press-me {
+    outline-color: rgba(37, 99, 235, 0.95);
+  }
+
+  .hint-dot::before { opacity: 0.7; }
+}

@@ -214,6 +214,7 @@ class GameController {
     localStorage.setItem(this.progressKey('last_played'), (levelIndex + 1).toString());
 
     this.stopRunning();
+    this.clearHint(true);
     this.commands = [];
     this.trail = [];
     this.collected = new Set();
@@ -352,6 +353,9 @@ class GameController {
           cell.appendChild(token);
         }
 
+        // Hint markers: the way to go, the plan so far, and any danger
+        this.decorateHintCell(cell, x, y);
+
         // Breadcrumb Trail dot
         if (trailMap.has(key) && !(this.robotPos.x === x && this.robotPos.y === y)) {
           const trailNum = trailMap.get(key);
@@ -378,6 +382,56 @@ class GameController {
     }
 
     this.fitBoard();
+  }
+
+  // Paints whatever the current hint wants to say about this square: a
+  // bouncing arrow for the very next move, fading footsteps along the rest of
+  // the way, a target ring on what to head for, and a warning on trouble.
+  decorateHintCell(cell, x, y) {
+    const hint = this.hint;
+    if (!hint) return;
+
+    const at = (sq) => sq && sq.x === x && sq.y === y;
+
+    if (hint.danger && at(hint.danger)) {
+      cell.classList.add('hint-danger');
+      cell.insertAdjacentHTML('beforeend', '<div class="hint-mark hint-stop">✕</div>');
+    }
+
+    if (hint.warnAt && at(hint.warnAt)) {
+      cell.classList.add('hint-warn');
+    }
+
+    if (hint.goal && at(hint.goal)) {
+      cell.classList.add('hint-goal');
+    }
+
+    // The robot's current plan, drawn faintly so it reads as "already asked for"
+    const planIdx = (hint.plan || []).findIndex(at);
+    if (planIdx >= 0) {
+      cell.insertAdjacentHTML(
+        'beforeend',
+        `<div class="hint-mark hint-plan${hint.kind === 'ready' ? ' good' : ''}" style="--i:${planIdx}"></div>`
+      );
+    }
+
+    // The suggested way onwards. The first square gets a big bouncing arrow,
+    // the rest are footsteps flowing towards the goal.
+    const routeIdx = (hint.route || []).findIndex(at);
+    if (routeIdx >= 0) {
+      const step = hint.route[routeIdx];
+      if (routeIdx === 0) {
+        cell.insertAdjacentHTML(
+          'beforeend',
+          `<div class="hint-mark hint-next dir-${step.dir.toLowerCase()}">${ICONS.arrow}</div>`
+        );
+      } else {
+        cell.insertAdjacentHTML(
+          'beforeend',
+          `<div class="hint-mark hint-dot" style="--i:${routeIdx}"></div>`
+        );
+      }
+    }
   }
 
   // Blender jug, drawn with the recipe colour filling it as ingredients go in.
@@ -473,6 +527,7 @@ class GameController {
       return;
     }
 
+    this.clearHint();
     this.rewindIfExecuted();
     this.commands.push(dir);
     Sound.playClick();
@@ -485,6 +540,7 @@ class GameController {
 
   removeCommandAt(index) {
     if (this.isRunning) return;
+    this.clearHint();
     this.commands.splice(index, 1);
     this.rewindIfExecuted();
     Sound.playDelete();
@@ -497,6 +553,7 @@ class GameController {
 
   removeLastCommand() {
     if (this.isRunning || this.commands.length === 0) return;
+    this.clearHint();
     this.commands.pop();
     this.rewindIfExecuted();
     Sound.playDelete();
@@ -509,6 +566,7 @@ class GameController {
 
   clearCommands() {
     if (this.isRunning || this.commands.length === 0) return;
+    this.clearHint();
     this.commands = [];
     Sound.playDelete();
     if (typeof Voice !== 'undefined') {
@@ -545,6 +603,7 @@ class GameController {
       }
 
       card.classList.add(dirClass[cmd]);
+      if (this.hint && this.hint.badCard === idx) card.classList.add('hint-bad');
       card.setAttribute('aria-label', `Step ${idx + 1}: ${cmd.toLowerCase()}`);
       card.innerHTML = `
         <span class="card-step-num">${idx + 1}</span>
@@ -587,6 +646,7 @@ class GameController {
   // ==========================================
   runAll() {
     if (this.isRunning || this.commands.length === 0) return;
+    this.clearHint();
     Sound.init();
     if (typeof Voice !== 'undefined') {
       Voice.speakButton("Run!");
@@ -645,6 +705,7 @@ class GameController {
 
   stepOnce() {
     if (this.isRunning || this.commands.length === 0) return;
+    this.clearHint();
     Sound.init();
     if (typeof Voice !== 'undefined' && this.executionStep === 0) {
       Voice.speakButton("Step");
@@ -776,6 +837,7 @@ class GameController {
   }
 
   resetRobot() {
+    this.clearHint(true);
     this.stopRunning();
     if (typeof Voice !== 'undefined') {
       Voice.cancel();
@@ -1008,13 +1070,26 @@ class GameController {
     // whether arriving at the blender actually finishes the level.
     const basket = new Set(collected);
     const goal = this.goalSquare(level);
+    // Every square the robot would stand on, so a hint can draw the plan.
+    const path = [];
 
     for (let i = 0; i < commands.length; i++) {
       const move = previewMove(level, pos, commands[i]);
       // Report the square in front of the mistake: that is where advice helps.
-      if (move.blocked) return { pos, blocked: move.blocked, stepIndex: i, collected: basket };
+      if (move.blocked) {
+        return {
+          pos,
+          blocked: move.blocked,
+          stepIndex: i,
+          collected: basket,
+          path,
+          // Where the trouble sits, when it is a square on the board at all.
+          troubleAt: move.blocked === 'edge' ? null : move.pos
+        };
+      }
 
       pos = move.pos;
+      path.push({ ...pos });
 
       const picked = this.ingredientsOf(level)
         .find(ing => ing.x === pos.x && ing.y === pos.y);
@@ -1022,11 +1097,11 @@ class GameController {
 
       // The run stops the moment the job is done, so later steps never run.
       if (pos.x === goal.x && pos.y === goal.y && this.recipeComplete(level, basket)) {
-        return { pos, reachedGem: true, stepIndex: i, collected: basket };
+        return { pos, reachedGem: true, stepIndex: i, collected: basket, path };
       }
     }
 
-    return { pos, blocked: null, collected: basket };
+    return { pos, blocked: null, collected: basket, path };
   }
 
   // What the robot should head for next: the closest ingredient still on the
@@ -1048,23 +1123,65 @@ class GameController {
     return { square: best.ingredient, ingredient: best.ingredient };
   }
 
+  // ==========================================
+  // VISUAL HINTS
+  // The player may not be able to read a word of this, so every hint is drawn
+  // on the board: where to go, which button to press, and what to watch out
+  // for. The written message and the spoken line are extras for grown-ups.
+  // ==========================================
+  // `silent` is for callers that are about to redraw everything themselves.
+  clearHint(silent = false) {
+    if (this.hintTimer) {
+      clearTimeout(this.hintTimer);
+      this.hintTimer = null;
+    }
+    if (!this.hint) return;
+    this.hint = null;
+    document.querySelectorAll('.press-me').forEach(el => el.classList.remove('press-me'));
+    if (silent) return;
+    this.renderGrid();
+    this.renderCommandTape();
+  }
+
+  // Draws the hint and pulses the button to press. It clears itself after a
+  // while so the board does not stay covered in markers.
+  showHintVisual(hint, buttonId) {
+    this.hint = hint;
+    this.renderGrid();
+    this.renderCommandTape();
+
+    document.querySelectorAll('.press-me').forEach(el => el.classList.remove('press-me'));
+    const btn = buttonId ? document.getElementById(buttonId) : null;
+    if (btn) btn.classList.add('press-me');
+
+    if (this.hintTimer) clearTimeout(this.hintTimer);
+    this.hintTimer = setTimeout(() => this.clearHint(), 9000);
+  }
+
   showHint() {
     const lvl = this.getCurrentLevel();
-    Sound.playClick();
+    Sound.playHint();
 
     const say = (text) => {
       if (typeof Voice !== 'undefined') Voice.speakEvent(text);
     };
     const arrows = { UP: "⬆️ Up", DOWN: "⬇️ Down", LEFT: "⬅️ Left", RIGHT: "➡️ Right" };
+    const dirButton = { UP: 'btn-up', DOWN: 'btn-down', LEFT: 'btn-left', RIGHT: 'btn-right' };
     const plural = (n) => (n === 1 ? "step" : "steps");
 
+    // Robot in a hole: point at Reset, and mark where it fell.
     if (this.robotState === "fall") {
+      this.showHintVisual(
+        { kind: 'stuck', route: [], danger: { ...this.robotPos } },
+        'btn-reset'
+      );
       this.showMessage("The robot is down the pit! Press Reset ↺ to lift it out.", "warn");
       say("Press reset to lift the robot out of the pit!");
       return;
     }
 
     if (this.hasWon()) {
+      this.clearHint();
       this.showMessage("All done here! 🎉", "info");
       say("All done here!");
       return;
@@ -1075,9 +1192,14 @@ class GameController {
     const pending = this.commands.slice(this.executionStep);
     const plan = this.projectProgram(lvl, this.robotPos, pending);
 
+    // The plan already works: trace it in green and pulse Run.
     if (plan.reachedGem) {
       const stepNumber = this.executionStep + plan.stepIndex + 1;
       const prize = this.isRecipeLevel(lvl) ? "blends the smoothie" : "reaches the gem";
+      this.showHintVisual(
+        { kind: 'ready', plan: plan.path, route: [], goal: { ...plan.pos } },
+        'btn-run'
+      );
       this.showMessage(`Your plan ${prize} on step ${stepNumber}! Press ▶ Run.`, "info");
       say(`Your plan ${prize}! Press run!`);
       return;
@@ -1087,7 +1209,10 @@ class GameController {
     // heading for the next ingredient before the blender.
     const target = this.nextTarget(lvl, plan.pos, plan.collected);
     const route = this.solveBFS(lvl, plan.pos, target.square);
+    const routeSquares = this.squaresAlong(plan.pos, route);
 
+    // The plan goes wrong: show how far it gets, flag the bad step and the
+    // hazard, and point at a direction that works instead.
     if (plan.blocked) {
       const stepNumber = this.executionStep + plan.stepIndex + 1;
       const trouble = {
@@ -1095,6 +1220,17 @@ class GameController {
         rock: "bumps into a rock",
         pit: "falls into the pit"
       }[plan.blocked];
+
+      this.showHintVisual({
+        kind: 'danger',
+        plan: plan.path,
+        route: routeSquares,
+        danger: plan.troubleAt,
+        warnAt: { ...plan.pos },
+        badCard: this.executionStep + plan.stepIndex,
+        goal: route.length ? { ...target.square } : null
+      }, route.length ? dirButton[route[0]] : null);
+
       const fix = route.length ? ` Try ${arrows[route[0]]} instead.` : "";
       this.showMessage(`Careful! Step ${stepNumber} ${trouble}.${fix}`, "warn");
       say(`Careful! Step ${stepNumber} ${trouble}.` +
@@ -1103,16 +1239,25 @@ class GameController {
     }
 
     if (!route.length) {
+      this.showHintVisual({ kind: 'stuck', route: [], danger: null }, 'btn-reset');
       this.showMessage("Hmm, there's no way through from there. Press Reset ↺ to start over!", "warn");
       say("There is no way through from there. Press reset to start over!");
       return;
     }
 
+    // The ordinary hint: draw the way to the next thing worth reaching.
     const nextDir = route[0];
-    const goal = target.ingredient
+    this.showHintVisual({
+      kind: 'route',
+      plan: plan.path,
+      route: routeSquares,
+      goal: { ...target.square }
+    }, dirButton[nextDir]);
+
+    const goalName = target.ingredient
       ? `${target.ingredient.emoji} ${target.ingredient.name}`
       : (this.isRecipeLevel(lvl) ? "the blender" : "the gem");
-    const togo = `${route.length} ${plural(route.length)} to ${goal}.`;
+    const togo = `${route.length} ${plural(route.length)} to ${goalName}.`;
 
     if (pending.length === 0) {
       const atStart = this.robotPos.x === lvl.start.x && this.robotPos.y === lvl.start.y;
@@ -1127,6 +1272,17 @@ class GameController {
       "info"
     );
     say(`Good so far! Add ${nextDir.toLowerCase()} next.`);
+  }
+
+  // Turns a list of directions into the squares they pass through, each
+  // remembering which way the robot was heading when it got there.
+  squaresAlong(from, directions) {
+    let pos = { ...from };
+    return directions.map(dir => {
+      const delta = STEP_DELTAS[dir];
+      pos = { x: pos.x + delta.dx, y: pos.y + delta.dy };
+      return { ...pos, dir };
+    });
   }
 
   // Shortest route to the gem from any square (defaults to the level start),

@@ -362,6 +362,92 @@ const same = (a, b) => a.x === b.x && a.y === b.y;
     );
   }
 
+  // 7. Hints have to work for a player who cannot read them: everything the
+  //    hint says must also be drawn on the board and on the buttons.
+  {
+    const r = await page.evaluate(async () => {
+      const game = window.game;
+      const count = (sel) => document.querySelectorAll(sel).length;
+      const pressed = () => {
+        const el = document.querySelector('.press-me');
+        return el ? el.id : null;
+      };
+      const out = {};
+
+      // A plain hint: an arrow for the next move, footsteps onwards, a ring
+      // around the prize, and the matching button pulsing.
+      game.loadLevel(11);
+      game.showHint();
+      out.route = {
+        arrow: count('.hint-next'),
+        steps: count('.hint-dot'),
+        goal: count('.hint-goal'),
+        pressed: pressed()
+      };
+      // Which way does the drawn arrow point, and does the pulsing button agree?
+      const arrowEl = document.querySelector('.hint-next');
+      out.route.arrowDir = arrowEl
+        ? [...arrowEl.classList].find((c) => c.startsWith('dir-'))
+        : null;
+
+      // Acting on the hint clears it again.
+      game.addCommand('DOWN');
+      out.clearedAfterAction = {
+        marks: count('.hint-mark'),
+        pressed: pressed()
+      };
+
+      // A plan that hits a rock: the bad card, the hazard and a way out.
+      game.loadLevel(11);
+      ['DOWN', 'RIGHT', 'RIGHT', 'RIGHT'].forEach((c) => game.addCommand(c));
+      game.showHint();
+      out.danger = {
+        badCards: count('.command-card.hint-bad'),
+        stop: count('.hint-stop'),
+        hazardRing: count('.hint-danger'),
+        pressed: pressed()
+      };
+
+      // A winning plan: Run is the button to press.
+      game.loadLevel(2);
+      game.solveBFS(LEVELS[2], LEVELS[2].start).forEach((c) => game.addCommand(c));
+      game.showHint();
+      out.ready = {
+        goodSteps: count('.hint-plan.good'),
+        pressed: pressed()
+      };
+
+      return out;
+    });
+
+    check(
+      'a hint draws the next move, the way onwards and the prize',
+      r.route.arrow === 1 && r.route.steps > 0 && r.route.goal === 1,
+      JSON.stringify(r.route)
+    );
+    check(
+      'the pulsing button matches the arrow drawn on the board',
+      r.route.pressed === `btn-${r.route.arrowDir.replace('dir-', '')}`,
+      `${r.route.pressed} vs ${r.route.arrowDir}`
+    );
+    check(
+      'the hint clears once the player acts on it',
+      r.clearedAfterAction.marks === 0 && r.clearedAfterAction.pressed === null,
+      JSON.stringify(r.clearedAfterAction)
+    );
+    check(
+      'a bad plan flags the step, marks the hazard and offers a way out',
+      r.danger.badCards === 1 && r.danger.stop === 1 && r.danger.hazardRing === 1 &&
+        /^btn-(up|down|left|right)$/.test(r.danger.pressed || ''),
+      JSON.stringify(r.danger)
+    );
+    check(
+      'a winning plan traces itself and pulses Run',
+      r.ready.goodSteps > 0 && r.ready.pressed === 'btn-run',
+      JSON.stringify(r.ready)
+    );
+  }
+
   await browser.close();
 
   if (failures.length) {
