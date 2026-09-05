@@ -21,6 +21,7 @@ class GameController {
 
     // Cached elements
     this.gridEl = document.getElementById('game-grid');
+    this.gridViewportEl = document.querySelector('.grid-viewport');
     this.commandTapeEl = document.getElementById('command-tape');
     this.stepCountEl = document.getElementById('step-count-badge');
     this.levelTitleEl = document.getElementById('level-title');
@@ -30,6 +31,7 @@ class GameController {
     this.statusMsgEl = document.getElementById('status-message');
 
     this.initEvents();
+    this.initBoardFitting();
   }
 
   start() {
@@ -40,6 +42,41 @@ class GameController {
 
   getCurrentLevel() {
     return LEVELS[this.currentLevelIdx];
+  }
+
+  // ==========================================
+  // RESPONSIVE BOARD SIZING
+  // The board is the only flexible piece of the layout: it takes the
+  // largest square that fits the space left over once the header, the
+  // instruction tape and the (deliberately large) arrow pad are placed.
+  // That keeps the entire game on one screen at any size or orientation.
+  // ==========================================
+  initBoardFitting() {
+    if (!this.gridViewportEl) return;
+
+    const fit = () => this.fitBoard();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.boardObserver = new ResizeObserver(fit);
+      this.boardObserver.observe(this.gridViewportEl);
+    }
+
+    window.addEventListener('resize', fit);
+    window.addEventListener('orientationchange', () => setTimeout(fit, 150));
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fit).catch(() => {});
+    }
+
+    fit();
+  }
+
+  fitBoard() {
+    if (!this.gridViewportEl) return;
+    const rect = this.gridViewportEl.getBoundingClientRect();
+    const size = Math.floor(Math.min(rect.width, rect.height));
+    if (size <= 0) return;
+    this.gridEl.style.width = `${size}px`;
+    this.gridEl.style.height = `${size}px`;
   }
 
   loadLevel(levelIndex) {
@@ -175,6 +212,8 @@ class GameController {
         this.gridEl.appendChild(cell);
       }
     }
+
+    this.fitBoard();
   }
 
   // ==========================================
@@ -897,24 +936,31 @@ class GameController {
     // Speed toggle
     const speedBtn = document.getElementById('btn-speed');
     const speeds = [
-      { ms: 420, label: "🐇 Normal" },
-      { ms: 220, label: "⚡ Fast" },
-      { ms: 700, label: "🐢 Slow" }
+      { ms: 420, emoji: "🐇", label: "Normal" },
+      { ms: 220, emoji: "⚡", label: "Fast" },
+      { ms: 700, emoji: "🐢", label: "Slow" }
     ];
     let curSpeedIdx = 0;
     speedBtn.onclick = () => {
       curSpeedIdx = (curSpeedIdx + 1) % speeds.length;
-      this.speed = speeds[curSpeedIdx].ms;
-      speedBtn.textContent = speeds[curSpeedIdx].label;
+      const next = speeds[curSpeedIdx];
+      this.speed = next.ms;
+      setButtonLabel(speedBtn, next.emoji, next.label, `Speed: ${next.label}`);
       Sound.playClick();
     };
 
     // Sound toggle
     const soundBtn = document.getElementById('btn-sound');
-    soundBtn.textContent = Sound.isMuted() ? "🔇 Muted" : "🔊 Sound";
+    const paintSoundBtn = (muted) => setButtonLabel(
+      soundBtn,
+      muted ? "🔇" : "🔊",
+      muted ? "Muted" : "Sound",
+      muted ? "Sound off" : "Sound on"
+    );
+    paintSoundBtn(Sound.isMuted());
     soundBtn.onclick = () => {
       const muted = Sound.toggleMute();
-      soundBtn.textContent = muted ? "🔇 Muted" : "🔊 Sound";
+      paintSoundBtn(muted);
       if (!muted) Sound.playClick();
     };
 
@@ -1050,6 +1096,15 @@ class GameController {
         const modal = e.target.closest('.modal-overlay');
         if (modal) modal.classList.remove('open');
       };
+
+      // Tapping the dimmed backdrop closes the same modals. On a phone the
+      // card scrolls, so the × can end up out of view.
+      const overlay = btn.closest('.modal-overlay');
+      if (overlay) {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) overlay.classList.remove('open');
+        });
+      }
     });
 
     // Keyboard support (Arrow keys or WASD)
@@ -1078,6 +1133,28 @@ class GameController {
       }
     });
   }
+}
+
+// ==========================================
+// SMALL UI HELPERS
+// ==========================================
+// Buttons keep an emoji + a separate label span, so narrow screens can
+// hide the label with CSS and leave a clean, big icon-only tap target.
+function setButtonLabel(btn, emoji, label, ariaLabel) {
+  if (!btn) return;
+  btn.innerHTML = '';
+
+  const emojiEl = document.createElement('span');
+  emojiEl.className = 'btn-emoji';
+  emojiEl.textContent = emoji;
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'btn-label';
+  labelEl.textContent = label;
+
+  btn.appendChild(emojiEl);
+  btn.appendChild(labelEl);
+  btn.setAttribute('aria-label', ariaLabel || label);
 }
 
 // ==========================================

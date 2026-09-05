@@ -14,6 +14,16 @@
   --color-purple: #8B5CF6;
   --shadow-chunky: 0 6px 0 rgba(0, 0, 0, 0.18), 0 10px 20px rgba(0, 0, 0, 0.12);
   --shadow-btn: 0 4px 0 rgba(0, 0, 0, 0.2);
+
+  /* Fluid layout tokens: everything scales with the viewport so the whole
+     game always fits on a single screen without scrolling. */
+  --gap-stack: clamp(6px, 1.1vh, 12px);
+  --panel-pad: clamp(8px, 1.8vw, 16px);
+  --panel-radius: clamp(14px, 3vw, 24px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 * {
@@ -25,25 +35,37 @@
   touch-action: manipulation;
 }
 
+html {
+  height: 100%;
+}
+
 body {
   font-family: var(--primary-font);
   background: var(--bg-gradient);
   color: var(--text-dark);
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   justify-content: center;
-  align-items: center;
-  overflow-x: hidden;
+  align-items: stretch;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #app-container {
   width: 100%;
-  max-width: 960px;
-  min-height: 100vh;
+  max-width: 1040px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  gap: var(--gap-stack);
+  padding:
+    calc(var(--gap-stack) + var(--safe-top))
+    calc(var(--gap-stack) + var(--safe-right))
+    calc(var(--gap-stack) + var(--safe-bottom))
+    calc(var(--gap-stack) + var(--safe-left));
   position: relative;
+  overflow: hidden;
 }
 
 /* ==========================================
@@ -53,51 +75,64 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
   background: var(--panel-bg);
-  padding: 10px 18px;
-  border-radius: 20px;
+  padding: clamp(5px, 1vh, 10px) clamp(10px, 2vw, 18px);
+  border-radius: clamp(14px, 3vw, 20px);
   box-shadow: var(--shadow-chunky);
-  margin-bottom: 12px;
 }
 
 .logo-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .logo-icon {
-  font-size: 28px;
+  font-size: clamp(20px, 5vw, 28px);
   animation: gentle-bounce 2s infinite ease-in-out;
 }
 
+.logo-text {
+  min-width: 0;
+}
+
 .logo-text h1 {
-  font-size: 1.35rem;
+  font-size: clamp(1rem, 3.6vw, 1.35rem);
   font-weight: 800;
   background: linear-gradient(90deg, #2563EB, #7C3AED);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   line-height: 1.1;
+  white-space: nowrap;
 }
 
 .level-badge {
-  font-size: 0.8rem;
+  display: block;
+  font-size: clamp(0.65rem, 2.2vw, 0.8rem);
   font-weight: 700;
   color: var(--color-purple);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-actions {
   display: flex;
-  gap: 8px;
+  gap: clamp(4px, 1vw, 8px);
+  flex: 0 0 auto;
 }
 
 .pill-btn {
   background: #F1F5F9;
   border: 2px solid #CBD5E1;
   border-radius: 999px;
-  padding: 6px 14px;
+  padding: 6px clamp(9px, 1.8vw, 14px);
+  min-height: 38px;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: clamp(0.78rem, 2.2vw, 0.85rem);
   font-weight: 700;
   color: #334155;
   cursor: pointer;
@@ -105,7 +140,14 @@ body {
   transition: all 0.1s ease;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  white-space: nowrap;
+}
+
+.pill-btn .btn-emoji {
+  font-size: 1.05em;
+  line-height: 1;
 }
 
 .pill-btn:hover {
@@ -130,43 +172,50 @@ body {
    ========================================== */
 .game-stage {
   display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 16px;
-  flex: 1;
-}
-
-@media (max-width: 780px) {
-  .game-stage {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: minmax(0, 1fr) clamp(290px, 33vw, 350px);
+  gap: var(--gap-stack);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Left Arena Panel */
 .arena-panel {
   background: var(--panel-bg);
-  border-radius: 24px;
-  padding: 16px;
+  border-radius: var(--panel-radius);
+  padding: var(--panel-pad);
   box-shadow: var(--shadow-chunky);
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .level-banner {
   width: 100%;
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
+  gap: 8px;
+  margin-bottom: clamp(5px, 1vh, 12px);
+  padding-bottom: clamp(4px, 0.8vh, 8px);
   border-bottom: 2px dashed #E2E8F0;
 }
 
+.level-title-group {
+  min-width: 0;
+}
+
 .level-title-group h2 {
-  font-size: 1.15rem;
+  font-size: clamp(0.9rem, 2.9vw, 1.15rem);
   font-weight: 800;
   color: #1E293B;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .world-pill {
@@ -180,37 +229,46 @@ body {
 }
 
 .par-pill {
-  font-size: 0.85rem;
+  flex: 0 0 auto;
+  font-size: clamp(0.72rem, 2.3vw, 0.85rem);
   font-weight: 800;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 12px;
   background: #FEF3C7;
   color: #92400E;
   border: 1.5px solid #FDE68A;
+  white-space: nowrap;
 }
 
 /* ==========================================
    GRID BOARD STYLING
    ========================================== */
+/* The viewport claims all leftover vertical space; game.js sizes the board
+   itself to the largest square that fits inside it, so the puzzle never
+   pushes the controls off screen. */
 .grid-viewport {
   width: 100%;
-  max-width: 440px;
-  aspect-ratio: 1 / 1;
-  margin: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   justify-content: center;
   align-items: center;
+  overflow: hidden;
 }
 
 .grid-container {
-  width: 100%;
-  height: 100%;
+  /* Pre-JS fallback; overridden with explicit px by game.js fitBoard(). */
+  width: min(100%, 440px);
+  aspect-ratio: 1 / 1;
+  max-height: 100%;
+  flex: 0 0 auto;
   display: grid;
-  gap: 4px;
-  padding: 8px;
-  border-radius: 18px;
+  gap: clamp(2px, 0.9%, 4px);
+  padding: clamp(4px, 1.5%, 8px);
+  border-radius: clamp(10px, 2.6vw, 18px);
   position: relative;
-  transition: all 0.3s ease;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 /* World Themes */
@@ -277,12 +335,13 @@ body {
 
 /* Trail Footprints / Dots */
 .trail-dot {
-  width: 22px;
-  height: 22px;
+  width: min(60%, 22px);
+  height: min(60%, 22px);
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   background: rgba(59, 130, 246, 0.85);
   color: #FFFFFF;
-  font-size: 0.7rem;
+  font-size: clamp(0.55rem, 1.7vw, 0.7rem);
   font-weight: 800;
   display: flex;
   justify-content: center;
@@ -356,17 +415,22 @@ body {
 /* Status Message and Tip Bar */
 .status-bar {
   width: 100%;
-  margin-top: 10px;
+  flex: 0 0 auto;
+  margin-top: clamp(4px, 1vh, 10px);
   text-align: center;
 }
 
 .status-message {
-  font-size: 0.9rem;
+  font-size: clamp(0.76rem, 2.4vw, 0.9rem);
   font-weight: 700;
-  min-height: 24px;
-  padding: 4px 10px;
+  padding: 3px 10px;
   border-radius: 8px;
-  transition: all 0.2s;
+  transition: color 0.2s, background 0.2s;
+}
+
+/* Collapse to zero height while there is nothing to say */
+.status-message:empty {
+  display: none;
 }
 
 .status-message.info {
@@ -389,10 +453,18 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 0.8rem;
+  font-size: clamp(0.72rem, 2.2vw, 0.8rem);
   font-weight: 600;
   color: var(--text-muted);
   margin-top: 4px;
+  line-height: 1.25;
+}
+
+.tip-box #tip-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ==========================================
@@ -400,12 +472,15 @@ body {
    ========================================== */
 .controls-panel {
   background: var(--panel-bg);
-  border-radius: 24px;
-  padding: 16px;
+  border-radius: var(--panel-radius);
+  padding: var(--panel-pad);
   box-shadow: var(--shadow-chunky);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-stack);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Command Tape (Instructions Sequence) */
@@ -413,24 +488,35 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .tape-header h3 {
-  font-size: 0.95rem;
+  font-size: clamp(0.8rem, 2.5vw, 0.95rem);
   font-weight: 800;
   color: #1E293B;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tape-title-group {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
 }
 
 .tape-clear-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  flex: 0 0 auto;
+  white-space: nowrap;
   background: #FEE2E2;
   color: #DC2626;
   border: 1.5px solid #FECACA;
@@ -466,17 +552,20 @@ body {
 }
 
 .badge-counter {
+  flex: 0 0 auto;
   font-size: 0.75rem;
   font-weight: 800;
   padding: 2px 8px;
   border-radius: 12px;
   background: #EDE9FE;
   color: #6D28D9;
+  white-space: nowrap;
 }
 
 .command-tape-viewport {
   width: 100%;
-  min-height: 86px;
+  flex: 0 0 auto;
+  height: clamp(58px, 9.5vh, 88px);
   background: #F8FAFC;
   border: 2px solid #E2E8F0;
   border-radius: 14px;
@@ -499,8 +588,8 @@ body {
 
 /* Command Card Chip */
 .command-card {
-  flex: 0 0 54px;
-  height: 72px;
+  flex: 0 0 clamp(42px, 12vw, 54px);
+  height: 100%;
   background: #FFFFFF;
   border: 2.5px solid #93C5FD;
   border-radius: 10px;
@@ -512,6 +601,10 @@ body {
   padding: 4px 2px;
   position: relative;
   transition: transform 0.15s, border-color 0.15s;
+}
+
+.command-card .card-arrow {
+  font-size: clamp(1.05rem, 4vw, 1.3rem);
 }
 
 .command-card.active-executing {
@@ -566,16 +659,18 @@ body {
 .action-bar {
   display: grid;
   grid-template-columns: 1.6fr 1fr 1fr;
-  gap: 8px;
+  gap: clamp(6px, 1.4vw, 10px);
+  flex: 0 0 auto;
 }
 
 .action-btn {
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: clamp(0.88rem, 2.8vw, 1.05rem);
   font-weight: 800;
   border: none;
-  border-radius: 14px;
-  padding: 10px 8px;
+  border-radius: clamp(12px, 3vw, 16px);
+  padding: clamp(8px, 1.3vh, 12px) 6px;
+  min-height: clamp(44px, 6.2vh, 56px);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -613,21 +708,21 @@ body {
   box-shadow: 0 4px 0 #D97706;
 }
 
-/* Direction Pad */
+/* Direction Pad - deliberately the biggest, chunkiest target on screen */
 .dpad-container {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(2, 60px);
-  gap: 8px;
-  margin-top: 4px;
+  grid-template-rows: repeat(2, clamp(62px, 12vh, 130px));
+  gap: clamp(6px, 1.6vw, 10px);
+  flex: 0 0 auto;
+  min-height: 0;
 }
 
 .arrow-btn {
   font-family: inherit;
   font-weight: 800;
-  font-size: 1.05rem;
   border: none;
-  border-radius: 16px;
+  border-radius: clamp(14px, 3.5vw, 20px);
   cursor: pointer;
   background: #FFFFFF;
   border: 2px solid #E2E8F0;
@@ -636,8 +731,11 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
+  padding: 2px;
+  min-width: 0;
   color: #1E293B;
-  transition: all 0.1s ease;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
 }
 
 .arrow-btn:active {
@@ -646,15 +744,17 @@ body {
 }
 
 .arrow-btn .btn-icon {
-  font-size: 1.3rem;
+  font-size: clamp(1.5rem, 7vw, 2.15rem);
   line-height: 1;
 }
 
 .arrow-btn .btn-text {
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: clamp(0.74rem, 2.9vw, 1rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: #64748B;
+  color: #334155;
+  line-height: 1;
 }
 
 #btn-up {
@@ -690,22 +790,35 @@ body {
 .secondary-bar {
   display: flex;
   justify-content: space-between;
-  gap: 6px;
-  margin-top: 4px;
+  gap: clamp(4px, 1.2vw, 8px);
+  flex: 0 0 auto;
 }
 
 .sec-btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
   background: #F1F5F9;
   border: 1.5px solid #CBD5E1;
   border-radius: 10px;
-  padding: 6px 4px;
+  padding: clamp(4px, 0.8vh, 8px) 4px;
   font-family: inherit;
-  font-size: 0.75rem;
+  font-size: clamp(0.7rem, 2.2vw, 0.8rem);
   font-weight: 700;
   color: #475569;
   cursor: pointer;
   box-shadow: 0 2px 0 #CBD5E1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sec-btn .btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sec-btn:hover:not(:disabled) {
@@ -736,7 +849,7 @@ body {
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(4px);
   display: none;
@@ -757,10 +870,25 @@ body {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
   width: 100%;
   max-width: 480px;
-  padding: 24px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: clamp(16px, 4vw, 24px);
   position: relative;
   text-align: center;
   animation: pop-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-card h2 {
+  font-size: clamp(1.15rem, 5vw, 1.6rem);
+  line-height: 1.2;
+}
+
+/* Cards with a close button reserve room for it on both sides so the
+   heading stays centred instead of sliding under the button. */
+.wardrobe-card h2,
+.voice-card h2 {
+  padding: 0 34px;
 }
 
 .modal-close-btn {
@@ -853,7 +981,7 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 10px;
-  max-height: 240px;
+  max-height: min(240px, 34dvh);
   overflow-y: auto;
   padding: 4px;
 }
@@ -908,7 +1036,7 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
   gap: 8px;
-  max-height: 380px;
+  max-height: min(380px, 50dvh);
   overflow-y: auto;
   padding: 4px;
 }
@@ -1202,4 +1330,219 @@ input[type="range"] {
 @keyframes pulse-light {
   from { fill: #EF4444; }
   to { fill: #10B981; }
+}
+
+/* ==========================================
+   RESPONSIVE: ONE-SCREEN LAYOUTS
+   Everything below keeps the whole game inside a single viewport
+   (no page scrolling) while protecting the size of the arrow buttons.
+   ========================================== */
+
+/* --- Narrow portrait: stack the arena above the control panel --- */
+@media (max-width: 860px) and (orientation: portrait) {
+  .game-stage {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The board absorbs whatever height is left over... */
+  .arena-panel {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  /* ...while the controls always keep their full, chunky size. */
+  .controls-panel {
+    flex: 0 0 auto;
+  }
+
+  .dpad-container {
+    flex: 0 0 auto;
+    grid-template-rows: repeat(2, clamp(62px, 10.5vh, 96px));
+    grid-template-rows: repeat(2, clamp(62px, 10.5dvh, 96px));
+  }
+
+  .arrow-btn .btn-icon {
+    font-size: clamp(1.7rem, 8vw, 2.4rem);
+  }
+
+  .arrow-btn .btn-text {
+    font-size: clamp(0.8rem, 3.4vw, 1.05rem);
+  }
+}
+
+/* --- Roomy screens: keep the control stack vertically centred --- */
+@media (min-width: 861px), (orientation: landscape) {
+  .controls-panel {
+    justify-content: center;
+  }
+}
+
+/* --- Phone widths: nav and tool buttons collapse to icons --- */
+@media (max-width: 620px) {
+  .pill-btn .btn-label {
+    display: none;
+  }
+
+  .pill-btn {
+    min-width: 42px;
+    min-height: 42px;
+    padding: 0 10px;
+    gap: 0;
+  }
+
+  .pill-btn .btn-emoji {
+    font-size: 1.15rem;
+  }
+
+  .tape-clear-btn .btn-label {
+    display: none;
+  }
+
+  .action-bar {
+    grid-template-columns: 1.5fr 1fr 1fr;
+  }
+}
+
+/* Phone portrait: drop the tape's caption row and hand that height to the
+   board. The step cards are numbered themselves, and Clear still lives in
+   the tool bar underneath. */
+@media (max-width: 620px) and (orientation: portrait) {
+  .tape-header {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .tape-header h3 {
+    display: none;
+  }
+
+  .sec-btn .btn-label {
+    font-size: 0.7rem;
+  }
+}
+
+/* --- Short portrait screens: trim the optional chrome first --- */
+@media (orientation: portrait) and (max-height: 730px) {
+  .tip-box {
+    display: none;
+  }
+
+  .command-tape-viewport {
+    height: 56px;
+  }
+
+  .dpad-container {
+    grid-template-rows: repeat(2, clamp(58px, 9.5vh, 78px));
+    grid-template-rows: repeat(2, clamp(58px, 9.5dvh, 78px));
+  }
+}
+
+@media (orientation: portrait) and (max-height: 600px) {
+  .level-banner {
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+  }
+
+  .command-tape-viewport {
+    height: 50px;
+  }
+
+  .sec-btn .btn-label {
+    display: none;
+  }
+}
+
+/* --- Very short viewports: slim the instruction cards down to
+       number + arrow so nothing is clipped mid-card --- */
+@media (max-height: 600px), (orientation: landscape) and (max-height: 560px) {
+  .command-card .card-name {
+    display: none;
+  }
+
+  .command-card {
+    justify-content: center;
+    gap: 3px;
+  }
+}
+
+/* --- Phones held sideways: short and wide, keep two columns --- */
+@media (orientation: landscape) and (max-height: 560px) {
+  .tape-header h3 {
+    display: none;
+  }
+
+  .sec-btn {
+    font-size: 0.68rem;
+    gap: 3px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  .tip-box {
+    display: none;
+  }
+
+  .logo-icon {
+    font-size: 20px;
+  }
+
+  .top-nav {
+    padding: 4px 10px;
+  }
+
+  .pill-btn {
+    min-height: 34px;
+  }
+
+  .command-tape-viewport {
+    height: 52px;
+  }
+
+  .action-btn {
+    min-height: 38px;
+    padding: 6px 4px;
+  }
+
+  /* Let the pad soak up the spare height instead of leaving a gap */
+  .dpad-container {
+    flex: 1 1 auto;
+    grid-template-rows: repeat(2, minmax(42px, 1fr));
+  }
+
+  .arrow-btn .btn-icon {
+    font-size: clamp(1.2rem, 5.5vh, 1.9rem);
+  }
+
+  .arrow-btn .btn-text {
+    font-size: clamp(0.68rem, 2.4vh, 0.9rem);
+  }
+
+  .sec-btn {
+    min-height: 28px;
+  }
+}
+
+/* Respect reduced-motion preferences for the decorative loops */
+@media (prefers-reduced-motion: reduce) {
+  .logo-icon,
+  .gem-wrapper,
+  .propeller-blade,
+  .rocket-flame,
+  .antenna-light {
+    animation: none;
+  }
+}
+
+/* Touch input: drop the hover lift so buttons don't stay "stuck" after a tap */
+@media (hover: none) {
+  .pill-btn:hover,
+  .sec-btn:hover:not(:disabled),
+  .tape-clear-btn:hover:not(:disabled),
+  .voice-preset-btn:hover,
+  .wardrobe-item-card.unlocked:hover,
+  .level-card.unlocked:hover {
+    transform: none;
+  }
 }
