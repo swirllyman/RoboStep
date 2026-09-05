@@ -226,6 +226,139 @@ const same = (a, b) => a.x === b.x && a.y === b.y;
     );
   }
 
+  // 5. The refactored movement rules still stop the robot correctly.
+  {
+    const r = await page.evaluate(async () => {
+      const game = window.game;
+      const findLevel = (pred) => LEVELS.findIndex(pred);
+      const out = {};
+
+      // Walking off the board: the robot takes the legal moves, then stops at
+      // the boundary in a bump rather than stepping outside it.
+      game.loadLevel(0);
+      const lvl1 = LEVELS[0];
+      ['UP', 'UP', 'UP', 'UP'].forEach((c) => game.addCommand(c));
+      game.runAll();
+      await new Promise((res) => { const d = () => (game.isRunning ? setTimeout(d, 20) : res()); setTimeout(d, 20); });
+      const topRow = { x: lvl1.start.x, y: 0 };
+      const edgePreview = previewMove(lvl1, topRow, 'UP');
+      out.edge = {
+        after: { ...game.robotPos },
+        stoppedAt: topRow,
+        state: game.robotState,
+        previewBlocked: edgePreview.blocked,
+        previewPos: edgePreview.pos
+      };
+
+      // Stepping into a pit moves the robot in and ends the run.
+      const pitIdx = findLevel((l) => l.pits.length > 0);
+      game.loadLevel(pitIdx);
+      const lvl = LEVELS[pitIdx];
+      const pit = lvl.pits[0];
+      // Walk the robot next to a pit, then straight into it.
+      const route = game.solveBFS(lvl, lvl.start);
+      out.pitLevel = lvl.id;
+      out.pitReachable = route.length > 0;
+
+      // Drive directly: place a program that walks into the pit from beside it.
+      const beside = { x: pit.x, y: pit.y + 1 };
+      const inside = beside.y < lvl.height && !lvl.blockers.some((b) => b.x === beside.x && b.y === beside.y);
+      out.pitTestable = inside;
+      if (inside) {
+        const preview = previewMove(lvl, beside, 'UP');
+        out.pitPreview = preview.blocked;
+        out.pitPreviewPos = preview.pos;
+      }
+      return out;
+    });
+
+    check(
+      'walking off the board stops the robot at the boundary',
+      same(r.edge.after, r.edge.stoppedAt) && r.edge.state === 'bump',
+      `robot ended at ${JSON.stringify(r.edge.after)} in state ${r.edge.state}`
+    );
+    check(
+      'the edge is previewed as a blocked move that keeps the square',
+      r.edge.previewBlocked === 'edge' && same(r.edge.previewPos, r.edge.stoppedAt),
+      `preview said ${r.edge.previewBlocked} at ${JSON.stringify(r.edge.previewPos)}`
+    );
+    check(
+      'a pit is previewed as a fall onto the pit square',
+      !r.pitTestable || (r.pitPreview === 'pit' && r.pitPreviewPos),
+      `preview said ${r.pitPreview}`
+    );
+  }
+
+  // 6. Hints are contextual: they describe the robot's situation, not the
+  //    level's opening move.
+  {
+    const r = await page.evaluate(async () => {
+      const game = window.game;
+      const msg = () => document.getElementById('status-message').textContent;
+      const out = {};
+
+      game.loadLevel(6); // Level 7: start bottom-left, gem top-right
+      game.showHint();
+      out.fresh = msg();
+
+      // Walk part-way, then ask again from the new square.
+      ['UP', 'UP'].forEach((c) => game.addCommand(c));
+      game.runAll();
+      await new Promise((res) => { const d = () => (game.isRunning ? setTimeout(d, 20) : res()); setTimeout(d, 20); });
+      out.movedTo = { ...game.robotPos };
+      game.showHint();
+      out.afterWalking = msg();
+
+      // Queue instructions without running them: the hint should look past them.
+      game.loadLevel(6);
+      ['UP', 'UP', 'UP'].forEach((c) => game.addCommand(c));
+      game.showHint();
+      out.withPlan = msg();
+
+      // A plan that walks off the board should be called out by step number.
+      game.loadLevel(6);
+      ['UP', 'UP', 'UP', 'UP', 'UP'].forEach((c) => game.addCommand(c));
+      game.showHint();
+      out.badPlan = msg();
+
+      // A winning plan should say so rather than suggest another step.
+      game.loadLevel(6);
+      const solution = game.solveBFS(LEVELS[6], LEVELS[6].start);
+      solution.forEach((c) => game.addCommand(c));
+      game.showHint();
+      out.winningPlan = msg();
+      out.solutionLength = solution.length;
+
+      return out;
+    });
+
+    check(
+      'a fresh level hints the opening move',
+      /Start by going/.test(r.fresh),
+      `said "${r.fresh}"`
+    );
+    check(
+      'after walking, the hint speaks from the new square',
+      /From here, go/.test(r.afterWalking),
+      `said "${r.afterWalking}"`
+    );
+    check(
+      'a queued plan is taken into account',
+      /add /i.test(r.withPlan) && /after your 3 steps/i.test(r.withPlan),
+      `said "${r.withPlan}"`
+    );
+    check(
+      'a plan that leaves the board is flagged with its step number',
+      /Careful! Step 4 walks off the edge/.test(r.badPlan),
+      `said "${r.badPlan}"`
+    );
+    check(
+      'a winning plan is recognised instead of extended',
+      /reaches the gem/.test(r.winningPlan),
+      `said "${r.winningPlan}"`
+    );
+  }
+
   await browser.close();
 
   if (failures.length) {

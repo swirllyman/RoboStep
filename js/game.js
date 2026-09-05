@@ -1,5 +1,37 @@
 // game.js - Core Game Controller, Loop, Interpreter, and UI Logic
 
+const STEP_DELTAS = {
+  UP: { dx: 0, dy: -1 },
+  DOWN: { dx: 0, dy: 1 },
+  LEFT: { dx: -1, dy: 0 },
+  RIGHT: { dx: 1, dy: 0 }
+};
+
+// What one instruction does from a given square, with no side effects. Both
+// the robot and the hint system read the rules from here, so a hint can never
+// describe a move the robot would not actually make.
+//   blocked: null   -> free move, pos is the destination
+//   blocked: 'edge' -> walks off the board, robot stays put
+//   blocked: 'rock' -> boulder in the way, robot stays put (pos is the rock)
+//   blocked: 'pit'  -> robot steps in and falls (pos is the pit)
+function previewMove(level, pos, cmd) {
+  const delta = STEP_DELTAS[cmd];
+  if (!delta) return { blocked: 'edge', pos: { ...pos } };
+
+  const next = { x: pos.x + delta.dx, y: pos.y + delta.dy };
+
+  if (next.x < 0 || next.x >= level.width || next.y < 0 || next.y >= level.height) {
+    return { blocked: 'edge', pos: { ...pos } };
+  }
+  if (level.blockers.some(b => b.x === next.x && b.y === next.y)) {
+    return { blocked: 'rock', pos: next };
+  }
+  if (level.pits.some(pit => pit.x === next.x && pit.y === next.y)) {
+    return { blocked: 'pit', pos: next };
+  }
+  return { blocked: null, pos: next };
+}
+
 class GameController {
   constructor() {
     this.currentLevelIdx = 0;
@@ -439,19 +471,10 @@ class GameController {
     const lvl = this.getCurrentLevel();
     this.robotDir = cmd;
 
-    const deltas = {
-      UP: { dx: 0, dy: -1 },
-      DOWN: { dx: 0, dy: 1 },
-      LEFT: { dx: -1, dy: 0 },
-      RIGHT: { dx: 1, dy: 0 }
-    };
-
-    const delta = deltas[cmd];
-    const nextX = this.robotPos.x + delta.dx;
-    const nextY = this.robotPos.y + delta.dy;
+    const move = previewMove(lvl, this.robotPos, cmd);
 
     // Check wall collision (out of bounds)
-    if (nextX < 0 || nextX >= lvl.width || nextY < 0 || nextY >= lvl.height) {
+    if (move.blocked === 'edge') {
       this.robotState = "bump";
       Sound.playBump();
       if (typeof Voice !== 'undefined') {
@@ -463,8 +486,7 @@ class GameController {
     }
 
     // Check blocker collision (rocks)
-    const isBlocker = lvl.blockers.some(b => b.x === nextX && b.y === nextY);
-    if (isBlocker) {
+    if (move.blocked === 'rock') {
       this.robotState = "bump";
       Sound.playBump();
       if (typeof Voice !== 'undefined') {
@@ -476,11 +498,10 @@ class GameController {
     }
 
     // Check pit hazard (fall into hole)
-    const isPit = lvl.pits.some(p => p.x === nextX && p.y === nextY);
-    if (isPit) {
+    if (move.blocked === 'pit') {
       // Step into the hole and fall
       this.trail.push({ ...this.robotPos });
-      this.robotPos = { x: nextX, y: nextY };
+      this.robotPos = { ...move.pos };
       this.robotState = "fall";
       Sound.playFall();
       if (typeof Voice !== 'undefined') {
@@ -493,7 +514,7 @@ class GameController {
 
     // Valid move!
     this.trail.push({ ...this.robotPos });
-    this.robotPos = { x: nextX, y: nextY };
+    this.robotPos = { ...move.pos };
     this.robotState = "walking";
 
     // Play musical step tone pitched according to step index (1, 2, 3...)
@@ -684,36 +705,111 @@ class GameController {
   // ==========================================
   // HINT SYSTEM
   // ==========================================
-  showHint() {
-    const lvl = this.getCurrentLevel();
-    // Run automated solver BFS to get the next step or optimal path
-    const path = this.solveBFS(lvl);
-    if (!path || path.length === 0) return;
+  // Walks the instructions that have not run yet, without touching game state,
+  // to find the square the robot will actually be standing on when the current
+  // program finishes (or where it goes wrong).
+  projectProgram(level, from, commands) {
+    let pos = { ...from };
 
-    // Suggest next optimal direction
-    const nextDir = path[0];
-    const arrowSymbols = { UP: "⬆️ Up", DOWN: "⬇️ Down", LEFT: "⬅️ Left", RIGHT: "➡️ Right" };
-    this.showMessage(`Hint: Try starting by going ${arrowSymbols[nextDir]}!`, "info");
-    Sound.playClick();
-    if (typeof Voice !== 'undefined') {
-      Voice.speakEvent(`Hint: Try going ${nextDir.toLowerCase()}!`);
+    for (let i = 0; i < commands.length; i++) {
+      const move = previewMove(level, pos, commands[i]);
+      // Report the square in front of the mistake: that is where advice helps.
+      if (move.blocked) return { pos, blocked: move.blocked, stepIndex: i };
+
+      pos = move.pos;
+      // The run stops the moment the gem is reached, so later steps never run.
+      if (pos.x === level.gem.x && pos.y === level.gem.y) {
+        return { pos, reachedGem: true, stepIndex: i };
+      }
     }
+
+    return { pos, blocked: null };
   }
 
-  solveBFS(level) {
+  showHint() {
+    const lvl = this.getCurrentLevel();
+    Sound.playClick();
+
+    const say = (text) => {
+      if (typeof Voice !== 'undefined') Voice.speakEvent(text);
+    };
+    const arrows = { UP: "⬆️ Up", DOWN: "⬇️ Down", LEFT: "⬅️ Left", RIGHT: "➡️ Right" };
+    const plural = (n) => (n === 1 ? "step" : "steps");
+
+    if (this.robotState === "fall") {
+      this.showMessage("The robot is down the pit! Press Reset ↺ to lift it out.", "warn");
+      say("Press reset to lift the robot out of the pit!");
+      return;
+    }
+
+    if (this.robotPos.x === lvl.gem.x && this.robotPos.y === lvl.gem.y) {
+      this.showMessage("You already found the gem! 💎", "info");
+      say("You already found the gem!");
+      return;
+    }
+
+    // A hint is only useful if it talks about where the robot ends up: look
+    // past the instructions still queued on the tape before giving advice.
+    const pending = this.commands.slice(this.executionStep);
+    const plan = this.projectProgram(lvl, this.robotPos, pending);
+
+    if (plan.reachedGem) {
+      const stepNumber = this.executionStep + plan.stepIndex + 1;
+      this.showMessage(`Your plan reaches the gem on step ${stepNumber}! Press ▶ Run.`, "info");
+      say("Your plan reaches the gem! Press run!");
+      return;
+    }
+
+    // Best route onwards from the square the current plan leaves the robot on.
+    const route = this.solveBFS(lvl, plan.pos);
+
+    if (plan.blocked) {
+      const stepNumber = this.executionStep + plan.stepIndex + 1;
+      const trouble = {
+        edge: "walks off the edge",
+        rock: "bumps into a rock",
+        pit: "falls into the pit"
+      }[plan.blocked];
+      const fix = route.length ? ` Try ${arrows[route[0]]} instead.` : "";
+      this.showMessage(`Careful! Step ${stepNumber} ${trouble}.${fix}`, "warn");
+      say(`Careful! Step ${stepNumber} ${trouble}.` +
+        (route.length ? ` Try ${route[0].toLowerCase()} instead.` : ""));
+      return;
+    }
+
+    if (!route.length) {
+      this.showMessage("Hmm, there's no way through from there. Press Reset ↺ to start over!", "warn");
+      say("There is no way through from there. Press reset to start over!");
+      return;
+    }
+
+    const nextDir = route[0];
+    const togo = `${route.length} ${plural(route.length)} to the gem.`;
+
+    if (pending.length === 0) {
+      const atStart = this.robotPos.x === lvl.start.x && this.robotPos.y === lvl.start.y;
+      const lead = atStart ? "Start by going" : "From here, go";
+      this.showMessage(`Hint: ${lead} ${arrows[nextDir]}! ${togo}`, "info");
+      say(`Hint: ${lead} ${nextDir.toLowerCase()}!`);
+      return;
+    }
+
+    this.showMessage(
+      `Good so far! After your ${pending.length} ${plural(pending.length)}, add ${arrows[nextDir]} next. ${togo}`,
+      "info"
+    );
+    say(`Good so far! Add ${nextDir.toLowerCase()} next.`);
+  }
+
+  // Shortest route to the gem from any square (defaults to the level start),
+  // so hints can be given from wherever the robot has walked to.
+  solveBFS(level, from = level.start) {
     const key = (x, y) => `${x},${y}`;
     const blockerSet = new Set(level.blockers.map(b => key(b.x, b.y)));
     const pitSet = new Set(level.pits.map(p => key(p.x, p.y)));
 
-    const queue = [{ x: level.start.x, y: level.start.y, path: [] }];
-    const visited = new Set([key(level.start.x, level.start.y)]);
-
-    const DIRS = [
-      { name: "UP", dx: 0, dy: -1 },
-      { name: "DOWN", dx: 0, dy: 1 },
-      { name: "LEFT", dx: -1, dy: 0 },
-      { name: "RIGHT", dx: 1, dy: 0 }
-    ];
+    const queue = [{ x: from.x, y: from.y, path: [] }];
+    const visited = new Set([key(from.x, from.y)]);
 
     while (queue.length > 0) {
       const cur = queue.shift();
@@ -721,7 +817,8 @@ class GameController {
         return cur.path;
       }
 
-      for (const dir of DIRS) {
+      for (const name of Object.keys(STEP_DELTAS)) {
+        const dir = STEP_DELTAS[name];
         const nx = cur.x + dir.dx;
         const ny = cur.y + dir.dy;
         const nKey = key(nx, ny);
@@ -730,7 +827,7 @@ class GameController {
         if (blockerSet.has(nKey) || pitSet.has(nKey) || visited.has(nKey)) continue;
 
         visited.add(nKey);
-        queue.push({ x: nx, y: ny, path: [...cur.path, dir.name] });
+        queue.push({ x: nx, y: ny, path: [...cur.path, name] });
       }
     }
     return [];
