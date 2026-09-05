@@ -90,10 +90,13 @@ The whole game is designed to fit in a single screen with **no scrolling at all*
 - **Notches & rounded corners**: safe-area insets are respected, and `100dvh` is used so the iOS Safari toolbar can't cut off the bottom row of buttons.
 - **Tight on space?** The layout sheds optional chrome first (tips, captions, button labels) before it ever shrinks a tap target.
 
-Run the layout regression check (needs Playwright) with:
+Run the regression checks (Playwright required for the first two) with:
 
 ```powershell
-node scripts/check_layout.js
+node scripts/check_layout.js      # one-screen layout across 13 viewports
+node scripts/check_execution.js   # the robot always obeys the program on screen
+node scripts/verify_levels.js     # all 50 levels are solvable
+node scripts/test_web.js          # assets and page wiring
 ```
 
 ---

@@ -94,6 +94,10 @@ class GameController {
     this.robotPos = { ...lvl.start };
     this.robotDir = "DOWN";
     this.robotState = "idle";
+    // Must be cleared with the rest of the play state: a level loaded while
+    // this still pointed at the previous level's last step made Run skip that
+    // many instructions.
+    this.executionStep = 0;
 
     // Update Header Info
     this.levelTitleEl.textContent = `Level ${lvl.id}: ${lvl.title}`;
@@ -219,6 +223,16 @@ class GameController {
   // ==========================================
   // COMMAND QUEUE MANAGEMENT
   // ==========================================
+  // A program that has already been run (or part-stepped) no longer lines up
+  // with the robot on screen once the list is edited. Rewinding to the start
+  // line keeps "step 1" meaning step 1, and keeps the breadcrumb trail honest.
+  rewindIfExecuted() {
+    const finished = this.robotState === "victory" || this.robotState === "fall";
+    if (this.executionStep === 0 && !finished) return false;
+    this.resetRobot();
+    return true;
+  }
+
   addCommand(dir) {
     if (this.isRunning) return;
     if (this.commands.length >= 40) {
@@ -226,6 +240,7 @@ class GameController {
       return;
     }
 
+    this.rewindIfExecuted();
     this.commands.push(dir);
     Sound.playClick();
     if (typeof Voice !== 'undefined') {
@@ -238,6 +253,7 @@ class GameController {
   removeCommandAt(index) {
     if (this.isRunning) return;
     this.commands.splice(index, 1);
+    this.rewindIfExecuted();
     Sound.playDelete();
     if (typeof Voice !== 'undefined') {
       Voice.speakButton("Remove");
@@ -249,6 +265,7 @@ class GameController {
   removeLastCommand() {
     if (this.isRunning || this.commands.length === 0) return;
     this.commands.pop();
+    this.rewindIfExecuted();
     Sound.playDelete();
     if (typeof Voice !== 'undefined') {
       Voice.speakButton("Undo");
