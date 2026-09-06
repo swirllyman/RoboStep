@@ -549,7 +549,19 @@ body {
   padding: 2px;
   position: relative;
   color: #64748B;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.command-card:active {
+  transform: translateY(1px);
+}
+
+.command-card:focus-visible {
+  outline: 3px solid #7C3AED;
+  outline-offset: 2px;
 }
 
 .command-card .card-step-num {
@@ -587,6 +599,40 @@ body {
   box-shadow: 0 0 0 3px #FDE68A, 0 2px 0 #D97706;
   transform: scale(1.08);
   background: #FFFBEB;
+}
+
+/* The step being changed: lifted out of the tape and ringed in violet, the
+   same colour the arrow buttons take on while they point at it. */
+.command-card.picked {
+  border-color: #7C3AED;
+  background: #F5F3FF;
+  box-shadow: 0 0 0 3px #DDD6FE, 0 3px 0 #7C3AED;
+  transform: translateY(-2px) scale(1.1);
+  z-index: 2;
+}
+
+.command-card.picked .card-step-num {
+  color: #6D28D9;
+}
+
+.card-add-btn {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #22C55E;
+  color: #FFFFFF;
+  border: none;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .card-del-btn {
@@ -773,6 +819,22 @@ body {
   background: linear-gradient(180deg, #FAE8FF, #F5D0FE);
   color: #C026D3;
   box-shadow: 0 5px 0 #E879F9, 0 8px 12px rgba(192, 38, 211, 0.18);
+}
+
+/* While a step is picked, the arrows change that step instead of adding one.
+   The violet ring matches the picked card so it is obvious where a tap lands. */
+.arrow-btn.editing {
+  box-shadow: 0 0 0 3px #C4B5FD, 0 5px 0 #A78BFA, 0 8px 12px rgba(124, 58, 237, 0.2);
+  animation: editing-pulse 1.5s ease-in-out infinite;
+}
+
+.arrow-btn.editing:active {
+  box-shadow: 0 0 0 3px #C4B5FD, 0 1px 0 #A78BFA;
+}
+
+@keyframes editing-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.06) saturate(1.12); }
 }
 
 .dir-up:active { box-shadow: 0 1px 0 #7DD3FC; }
@@ -1470,7 +1532,8 @@ input[type="range"] {
   .gem-wrapper,
   .propeller-blade,
   .rocket-flame,
-  .antenna-light {
+  .antenna-light,
+  .arrow-btn.editing {
     animation: none;
   }
 }

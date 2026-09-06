@@ -50,6 +50,16 @@ const VIEWPORTS = [
 const TEST_LEVEL = 50;
 const TEST_COMMANDS = 8;
 
+// Picking a step to change it lifts a card out of the tape and swaps the tip
+// line for a longer one, so the tightest screens are re-checked in that state.
+const EDITING_VIEWPORTS = [
+  { name: 'Galaxy Fold (portrait)', width: 320, height: 653 },
+  { name: 'Small Android (portrait)', width: 360, height: 640 },
+  { name: 'iPhone 12 + browser UI', width: 390, height: 664 },
+  { name: 'Small phone (landscape)', width: 568, height: 320 },
+  { name: 'iPhone SE (landscape)', width: 667, height: 375 }
+];
+
 // Smoothie Remix adds a recipe card above the board, so the tightest screens
 // are re-checked in that mode with its busiest recipe.
 const SMOOTHIE_VIEWPORTS = [
@@ -104,10 +114,11 @@ async function measure(page) {
   let failures = 0;
   const runs = [
     ...VIEWPORTS.map(vp => ({ vp, mode: 'classic' })),
+    ...EDITING_VIEWPORTS.map(vp => ({ vp, mode: 'classic', picked: true })),
     ...SMOOTHIE_VIEWPORTS.map(vp => ({ vp, mode: 'smoothie' }))
   ];
 
-  for (const { vp, mode } of runs) {
+  for (const { vp, mode, picked } of runs) {
     const context = await browser.newContext({
       viewport: { width: vp.width, height: vp.height },
       isMobile: vp.width < 820,
@@ -128,10 +139,12 @@ async function measure(page) {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.grid-cell');
 
-    await page.evaluate((count) => {
+    await page.evaluate(({ count, picked }) => {
       const dirs = ['RIGHT', 'DOWN', 'LEFT', 'UP'];
       for (let i = 0; i < count; i++) window.game.addCommand(dirs[i % dirs.length]);
-    }, TEST_COMMANDS);
+      // Mid-program, so the picked card sits in the middle of the tape.
+      if (picked) window.game.selectCommand(Math.floor(count / 2));
+    }, { count: TEST_COMMANDS, picked: !!picked });
     await page.waitForTimeout(120);
 
     const m = await measure(page);
@@ -155,7 +168,7 @@ async function measure(page) {
       }
     });
 
-    const modeTag = mode === 'smoothie' ? '🥤 ' : '';
+    const modeTag = picked ? '✏️ ' : (mode === 'smoothie' ? '🥤 ' : '');
     const label = `${modeTag}${vp.name} (${vp.width}x${vp.height})`.padEnd(36);
     if (problems.length) {
       failures++;

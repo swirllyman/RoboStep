@@ -22,6 +22,9 @@ function renderIcons(root = document) {
   });
 }
 
+// How many instructions one program may hold.
+const MAX_COMMANDS = 40;
+
 const STEP_DELTAS = {
   UP: { dx: 0, dy: -1 },
   DOWN: { dx: 0, dy: 1 },
@@ -74,6 +77,9 @@ class GameController {
     this.robotState = "idle";
     this.isRunning = false;
     this.executionStep = 0;
+    // Which step of the program is being edited, if any. While a step is
+    // selected the arrow buttons change that step instead of adding one.
+    this.selectedIndex = null;
     this.runTimer = null;
     this.speed = 420; // ms per step (Turtle: 700, Rabbit: 420, Lightning: 220)
 
@@ -90,6 +96,10 @@ class GameController {
     this.levelParEl = document.getElementById('level-par');
     this.tipTextEl = document.getElementById('tip-text');
     this.statusMsgEl = document.getElementById('status-message');
+
+    // The level's own tip, restored whenever the tip line stops explaining
+    // which step is being changed.
+    this.baseTip = this.tipTextEl ? this.tipTextEl.textContent : "";
 
     renderIcons();
     this.initEvents();
@@ -230,12 +240,14 @@ class GameController {
     // this still pointed at the previous level's last step made Run skip that
     // many instructions.
     this.executionStep = 0;
+    this.selectedIndex = null;
 
     // Update Header Info
     this.levelTitleEl.textContent = `Level ${lvl.id}: ${lvl.title}`;
     this.levelWorldEl.textContent = lvl.world;
     this.levelParEl.textContent = `Target: ${lvl.par} steps`;
-    this.tipTextEl.textContent = lvl.tip || "Plan your route to the gem!";
+    this.baseTip = lvl.tip || "Plan your route to the gem!";
+    this.tipTextEl.textContent = this.baseTip;
 
     this.renderRecipeBar();
     this.renderGrid();
@@ -520,9 +532,117 @@ class GameController {
     return true;
   }
 
+  // ------------------------------------------
+  // PICKING ONE STEP OUT OF THE PROGRAM
+  // Tapping a step card picks it: the card lifts out of the tape and the four
+  // arrows point at that step instead of the end of the list. A wrong turn
+  // half way down a program can then be fixed where it is, rather than undone
+  // back to.
+  // ------------------------------------------
+  selectCommand(index) {
+    if (this.isRunning) return;
+    if (index < 0 || index >= this.commands.length) return;
+
+    // Tapping the picked step again hands the arrows back to adding steps.
+    if (this.selectedIndex === index) {
+      this.clearSelection();
+      Sound.playClick();
+      this.showMessage("Arrows add steps to the end again.", "info");
+      return;
+    }
+
+    this.clearHint();
+    this.selectedIndex = index;
+    Sound.playClick();
+    if (typeof Voice !== 'undefined') {
+      Voice.speakButton(`Step ${index + 1}, ${this.commands[index].toLowerCase()}`);
+    }
+    this.showMessage(`Step ${index + 1} picked. Tap an arrow to change it.`, "info");
+    this.renderCommandTape();
+    this.updateControlsState();
+  }
+
+  // Puts the arrows back to adding steps at the end. `silent` skips the
+  // redraw for callers that are about to redraw anyway.
+  clearSelection(silent = false) {
+    if (this.selectedIndex === null) return false;
+    this.selectedIndex = null;
+    if (!silent) {
+      this.renderCommandTape();
+      this.updateControlsState();
+    }
+    return true;
+  }
+
+  // Keeps the selection on the step it was on while the list shifts under it,
+  // and drops it when that step is gone.
+  adjustSelectionForRemoval(index) {
+    if (this.selectedIndex === null) return;
+    if (this.selectedIndex === index) this.selectedIndex = null;
+    else if (this.selectedIndex > index) this.selectedIndex -= 1;
+  }
+
+  // Points the picked step in a new direction, keeping its place in the
+  // program. The robot rewinds first, so what runs next is the edited plan.
+  changeCommandAt(index, dir) {
+    if (this.isRunning) return;
+    if (index < 0 || index >= this.commands.length) return;
+    if (!STEP_DELTAS[dir]) return;
+
+    const unchanged = this.commands[index] === dir;
+    this.clearHint();
+    this.commands[index] = dir;
+    this.selectedIndex = index;
+    this.rewindIfExecuted();
+    Sound.playClick();
+    if (typeof Voice !== 'undefined') {
+      Voice.speakButton(`Step ${index + 1}, ${dir.toLowerCase()}`);
+    }
+    this.showMessage(
+      unchanged
+        ? `Step ${index + 1} is still ${dir.toLowerCase()}.`
+        : `Step ${index + 1} is now ${dir.toLowerCase()}.`,
+      "info"
+    );
+    this.renderCommandTape();
+    this.updateControlsState();
+  }
+
+  // Slots a new step in straight after the picked one and hands the arrows to
+  // it, so a forgotten move can go into the middle of a program. It starts as
+  // a copy of its neighbour: one tap of an arrow turns it into whatever the
+  // plan actually needs.
+  insertCommandAfter(index) {
+    if (this.isRunning) return;
+    if (index < 0 || index >= this.commands.length) return;
+    if (this.commands.length >= MAX_COMMANDS) {
+      this.showMessage("Maximum steps reached for this level!", "warn");
+      return;
+    }
+
+    this.clearHint();
+    this.commands.splice(index + 1, 0, this.commands[index]);
+    this.selectedIndex = index + 1;
+    this.rewindIfExecuted();
+    Sound.playClick();
+    if (typeof Voice !== 'undefined') {
+      Voice.speakButton(`New step ${index + 2}`);
+    }
+    this.showMessage(`New step ${index + 2} added. Tap an arrow to change it.`, "info");
+    this.renderCommandTape();
+    this.updateControlsState();
+  }
+
   addCommand(dir) {
     if (this.isRunning) return;
-    if (this.commands.length >= 40) {
+
+    // A picked step means "point this one somewhere else", not "add another".
+    if (this.selectedIndex !== null) {
+      this.changeCommandAt(this.selectedIndex, dir);
+      return;
+    }
+
+    if (this.commands.length >= MAX_COMMANDS) {
       this.showMessage("Maximum steps reached for this level!", "warn");
       return;
     }
@@ -540,8 +660,10 @@ class GameController {
 
   removeCommandAt(index) {
     if (this.isRunning) return;
+    if (index < 0 || index >= this.commands.length) return;
     this.clearHint();
     this.commands.splice(index, 1);
+    this.adjustSelectionForRemoval(index);
     this.rewindIfExecuted();
     Sound.playDelete();
     if (typeof Voice !== 'undefined') {
@@ -555,6 +677,7 @@ class GameController {
     if (this.isRunning || this.commands.length === 0) return;
     this.clearHint();
     this.commands.pop();
+    this.adjustSelectionForRemoval(this.commands.length);
     this.rewindIfExecuted();
     Sound.playDelete();
     if (typeof Voice !== 'undefined') {
@@ -568,6 +691,7 @@ class GameController {
     if (this.isRunning || this.commands.length === 0) return;
     this.clearHint();
     this.commands = [];
+    this.selectedIndex = null;
     Sound.playDelete();
     if (typeof Voice !== 'undefined') {
       Voice.cancel();
@@ -595,30 +719,73 @@ class GameController {
     }
 
     this.commands.forEach((cmd, idx) => {
+      const picked = this.selectedIndex === idx && !this.isRunning;
+
       const card = document.createElement('div');
       card.className = 'command-card';
       card.dataset.index = idx;
       if (this.isRunning && this.executionStep === idx) {
         card.classList.add('active-executing');
       }
+      if (picked) card.classList.add('picked');
 
       card.classList.add(dirClass[cmd]);
       if (this.hint && this.hint.badCard === idx) card.classList.add('hint-bad');
-      card.setAttribute('aria-label', `Step ${idx + 1}: ${cmd.toLowerCase()}`);
+
+      // Every card is a target in its own right: tap it to change that step.
+      card.setAttribute('role', 'button');
+      card.tabIndex = this.isRunning ? -1 : 0;
+      card.setAttribute('aria-pressed', picked ? 'true' : 'false');
+      card.setAttribute(
+        'aria-label',
+        `Step ${idx + 1}: ${cmd.toLowerCase()}. ` +
+        (picked ? 'Picked: tap an arrow to change it' : 'Tap to pick this step')
+      );
+      card.title = picked ? `Step ${idx + 1} picked — tap an arrow to change it` : `Change step ${idx + 1}`;
+
       card.innerHTML = `
         <span class="card-step-num">${idx + 1}</span>
         <span class="card-arrow">${ICONS.arrow}</span>
-        <button class="card-del-btn" title="Remove this step" aria-label="Remove step ${idx + 1}" onclick="window.game.removeCommandAt(${idx})">×</button>
+        <button class="card-del-btn" title="Remove this step" aria-label="Remove step ${idx + 1}">×</button>
+        ${picked ? `<button class="card-add-btn" title="Add a step after this one" aria-label="Add a step after step ${idx + 1}">+</button>` : ''}
       `;
+
+      card.addEventListener('click', () => this.selectCommand(idx));
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
+          // Keep Space off the global Run shortcut while a card has focus.
+          e.preventDefault();
+          e.stopPropagation();
+          this.selectCommand(idx);
+        }
+      });
+
+      card.querySelector('.card-del-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.removeCommandAt(idx);
+      });
+
+      const addBtn = card.querySelector('.card-add-btn');
+      if (addBtn) {
+        addBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.insertCommandAfter(idx);
+        });
+      }
 
       this.commandTapeEl.appendChild(card);
     });
 
-    // Auto-scroll tape to keep active or latest step visible
+    // Auto-scroll tape to keep the running, picked or latest step visible
     if (this.isRunning) {
       const activeCard = this.commandTapeEl.children[this.executionStep];
       if (activeCard) {
         activeCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    } else if (this.selectedIndex !== null) {
+      const pickedCard = this.commandTapeEl.children[this.selectedIndex];
+      if (pickedCard) {
+        pickedCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
       }
     } else {
       this.commandTapeEl.scrollLeft = this.commandTapeEl.scrollWidth;
@@ -639,6 +806,35 @@ class GameController {
     clearBtn.disabled = !hasCommands || this.isRunning;
     undoBtn.disabled = !hasCommands || this.isRunning;
     resetBtn.disabled = this.isRunning;
+
+    this.updateEditingAffordance();
+  }
+
+  // The arrows do one of two jobs: add a step at the end, or change the step
+  // that is picked. The buttons say which, so nobody has to guess where the
+  // next tap lands.
+  updateEditingAffordance() {
+    const editing = this.selectedIndex !== null && !this.isRunning;
+    const stepNo = editing ? this.selectedIndex + 1 : 0;
+
+    const dpad = document.querySelector('.dpad-container');
+    if (dpad) dpad.classList.toggle('editing', editing);
+
+    const names = { 'btn-up': 'up', 'btn-down': 'down', 'btn-left': 'left', 'btn-right': 'right' };
+    Object.entries(names).forEach(([id, name]) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.classList.toggle('editing', editing);
+      const title = name.charAt(0).toUpperCase() + name.slice(1);
+      btn.title = editing ? `Change step ${stepNo} to ${name}` : title;
+      btn.setAttribute('aria-label', editing ? `Change step ${stepNo} to ${name}` : `Add step: ${name}`);
+    });
+
+    if (this.tipTextEl) {
+      this.tipTextEl.textContent = editing
+        ? `Changing step ${stepNo} — tap an arrow. ✚ adds a step after it.`
+        : this.baseTip;
+    }
   }
 
   // ==========================================
@@ -647,6 +843,7 @@ class GameController {
   runAll() {
     if (this.isRunning || this.commands.length === 0) return;
     this.clearHint();
+    this.clearSelection();
     Sound.init();
     if (typeof Voice !== 'undefined') {
       Voice.speakButton("Run!");
@@ -706,6 +903,7 @@ class GameController {
   stepOnce() {
     if (this.isRunning || this.commands.length === 0) return;
     this.clearHint();
+    this.clearSelection();
     Sound.init();
     if (typeof Voice !== 'undefined' && this.executionStep === 0) {
       Voice.speakButton("Step");
@@ -1563,6 +1761,18 @@ class GameController {
     document.getElementById('btn-left').onclick = () => this.addCommand('LEFT');
     document.getElementById('btn-right').onclick = () => this.addCommand('RIGHT');
 
+    // Tapping the empty part of the tape lets go of the picked step, so the
+    // arrows go back to adding steps without hunting for the card again.
+    if (this.commandTapeEl) {
+      this.commandTapeEl.addEventListener('click', (e) => {
+        if (e.target.closest('.command-card')) return;
+        if (this.clearSelection()) {
+          Sound.playClick();
+          this.showMessage("Arrows add steps to the end again.", "info");
+        }
+      });
+    }
+
     // Execution buttons
     document.getElementById('btn-run').onclick = () => this.runAll();
     document.getElementById('btn-step').onclick = () => this.stepOnce();
@@ -1765,6 +1975,14 @@ class GameController {
         e.preventDefault();
         if (this.isRunning) this.resetRobot();
         else this.runAll();
+      } else if (e.code === 'Escape' && this.selectedIndex !== null) {
+        // Escape lets go of the picked step first; a second press clears all.
+        e.preventDefault();
+        this.clearSelection();
+      } else if (e.code === 'Delete' && this.selectedIndex !== null) {
+        // With a step picked, Delete takes out that one step, not the lot.
+        e.preventDefault();
+        this.removeCommandAt(this.selectedIndex);
       } else if (e.code === 'Delete' || e.code === 'Escape' || (e.code === 'Backspace' && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         this.clearCommands();

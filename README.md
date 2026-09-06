@@ -11,7 +11,15 @@ Help your friendly robot navigate through expanding worlds to collect the shiny 
 1. **Count & Plan**: Look at your robot and count how many tiles it needs to move to reach the Gem.
 2. **Give Instructions**: Tap the chunky directional arrow buttons (**⬆️ Up**, **⬇️ Down**, **⬅️ Left**, **➡️ Right**) or use your keyboard arrow keys / WASD.
    - Each instruction adds a numbered step card (1, 2, 3...) so kids can practice 1-to-1 counting.
-3. **Execute**:
+3. **Fix Any Step, Not Just the Last One**:
+   - **Tap a step card** to pick it. The card lifts out of the strip with a violet ring, and the four arrows light up to match: they now **change that step** instead of adding a new one at the end.
+   - **Tap an arrow** and the picked step turns to face that way — the robot rewinds to the start so the next run is the plan you can see.
+   - **✚** on the picked card slots a **new step in right after it** (handy for the move you forgot in the middle), and hands the arrows straight to it.
+   - **×** on any card removes just that step.
+   - **Tap the picked card again** (or the empty part of the strip) to let go, and the arrows go back to adding steps at the end.
+   - Keyboard: arrow keys change the picked step, **Delete** removes it, **Esc** lets go of it (a second Esc clears the whole program).
+
+4. **Execute**:
    - **▶ Run**: Watch the robot execute the entire program automatically!
    - **⏭ Step**: Execute just one instruction at a time so parents and kids can count together ("One! Two! Three!").
    - **↺ Reset**: Returns the robot to the start position without losing your program, so you can debug and tweak your steps.
@@ -26,7 +34,7 @@ Help your friendly robot navigate through expanding worlds to collect the shiny 
      The hint clears itself as soon as the player acts on it. The written line and the spoken hint are extras for grown-ups.
    - **🐢 / 🐇 / ⚡ Speed**: Adjust playback speed from slow turtle to lightning fast.
 
-4. **🎙️ Voice Studio (Fully Customizable)**:
+5. **🎙️ Voice Studio (Fully Customizable)**:
    - Tap the **🎙️ Voice** button in the top bar to open the **Robot Voice Studio**.
    - **Voice Pitch**: Adjust slider (0.5 to 2.0). Higher pitch (~1.45) sounds like a cute cartoon robot!
    - **Speaking Speed**: Adjust pace (0.5x to 1.8x) to match your kid's listening speed.
@@ -126,6 +134,7 @@ Run the regression checks (Playwright required for the first two) with:
 ```powershell
 node scripts/check_layout.js      # one-screen layout across every viewport
 node scripts/check_execution.js   # the robot always obeys the program on screen
+node scripts/check_editing.js     # any step can be picked, changed and inserted
 node scripts/check_smoothie.js    # Smoothie Remix collects, blends and slurps
 node scripts/verify_levels.js     # all 50 classic levels are solvable
 node scripts/verify_smoothie.js   # all 12 recipes are collectable, pars are optimal
@@ -135,6 +144,8 @@ node scripts/test_web.js          # assets and page wiring
 ---
 
 ## 🎹 Keyboard Controls
-- **Arrow Keys** or **W, A, S, D**: Add directional command
+- **Arrow Keys** or **W, A, S, D**: Add a directional command — or change the picked step, if one is picked
 - **Spacebar**: Run / Reset toggle
 - **Backspace**: Undo last instruction
+- **Delete**: Remove the picked step (or clear the program when nothing is picked)
+- **Esc**: Let go of the picked step; press again to clear the program
