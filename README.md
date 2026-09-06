@@ -24,6 +24,13 @@ Help your friendly robot navigate through expanding worlds to collect the shiny 
      - and if the plan goes wrong: the **step card** that causes it shakes red, the rock or pit gets a red ✕, and a blue arrow shows a way that works instead.
 
      The hint clears itself as soon as the player acts on it. The written line and the spoken hint are extras for grown-ups.
+   - **👻 Ghost**: A toggle that answers "where will my robot end up?" *before* anything runs:
+     - a **see-through robot** stands on the square the program would leave the real one on,
+     - every square on the way is **numbered**, so you can read off where the robot is at step 1, step 2, step 3...,
+     - the ring around the finishing square says how it turns out: **green 🎉** if the plan finishes the level, **amber 🚫** if it bonks a rock or the edge (the rock gets a dashed ring too), **red ⚠️** if it drops into a pit,
+     - it redraws itself as steps are added, undone or deleted, and steps aside while a 💡 Hint is on screen.
+
+     Great for "count first, then check" — plan the route, look at the ghost, fix the plan, *then* press Run. The setting is remembered next time.
    - **🐢 / 🐇 / ⚡ Speed**: Adjust playback speed from slow turtle to lightning fast.
 
 4. **🎙️ Voice Studio (Fully Customizable)**:
@@ -138,3 +145,4 @@ node scripts/test_web.js          # assets and page wiring
 - **Arrow Keys** or **W, A, S, D**: Add directional command
 - **Spacebar**: Run / Reset toggle
 - **Backspace**: Undo last instruction
+- **G**: Show / hide the ghost preview

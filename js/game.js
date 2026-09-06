@@ -77,6 +77,11 @@ class GameController {
     this.runTimer = null;
     this.speed = 420; // ms per step (Turtle: 700, Rabbit: 420, Lightning: 220)
 
+    // Ghost preview: when on, the board shows where the program would leave
+    // the robot before a single step is actually run. Remembered between
+    // sessions like the other play preferences.
+    this.ghostOn = localStorage.getItem('robostep_ghost') === '1';
+
     // Path trail history
     this.trail = [];
 
@@ -280,6 +285,8 @@ class GameController {
     const blockerMap = new Set(lvl.blockers.map(b => `${b.x},${b.y}`));
     const pitMap = new Set(lvl.pits.map(p => `${p.x},${p.y}`));
     const trailMap = new Map(this.trail.map((t, idx) => [`${t.x},${t.y}`, idx + 1]));
+    // Worked out once for the whole board rather than once per square.
+    const ghost = this.ghostPreview();
 
     for (let y = 0; y < lvl.height; y++) {
       for (let x = 0; x < lvl.width; x++) {
@@ -352,6 +359,9 @@ class GameController {
           token.textContent = ingredient.emoji;
           cell.appendChild(token);
         }
+
+        // Ghost preview: where the program would take the robot, step by step
+        this.decorateGhostCell(cell, x, y, ghost);
 
         // Hint markers: the way to go, the plan so far, and any danger
         this.decorateHintCell(cell, x, y);
@@ -503,6 +513,167 @@ class GameController {
   }
 
   // ==========================================
+  // GHOST PREVIEW
+  // "Where would my robot be?" - answered without running anything. With the
+  // ghost on, the board shows a see-through robot standing where the program
+  // would leave the real one, and numbers every square along the way, so the
+  // player can read off where the robot is at any point in the sequence.
+  // ==========================================
+  // Everything the board needs to draw the ghost, or null when there is
+  // nothing worth drawing. The projection obeys the same rules Run does: it
+  // starts from wherever Run would start and stops where the robot would stop.
+  ghostPreview() {
+    if (!this.ghostOn || this.commands.length === 0) return null;
+    // A hint takes the board over while it is on screen. Two sets of markers
+    // on the same squares would only muddle each other.
+    if (this.hint) return null;
+
+    const lvl = this.getCurrentLevel();
+    // Run replays the program from the level start once it has finished (or
+    // the robot has won or fallen), so the ghost has to project from there.
+    const restarts = this.executionStep >= this.commands.length || this.isFinishedState();
+    const done = restarts ? 0 : this.executionStep;
+    const from = restarts ? lvl.start : this.robotPos;
+    const pending = this.commands.slice(done);
+    if (pending.length === 0) return null;
+
+    const plan = this.projectProgram(lvl, from, pending, restarts ? new Set() : this.collected);
+
+    // One entry per square the robot stands on, carrying the step numbers that
+    // put it there - a square the program crosses twice keeps both.
+    const squares = new Map();
+    const visit = (pos, step) => {
+      const key = `${pos.x},${pos.y}`;
+      const seen = squares.get(key) || { x: pos.x, y: pos.y, steps: [] };
+      seen.steps.push(step);
+      squares.set(key, seen);
+    };
+    plan.path.forEach((pos, i) => visit(pos, done + i + 1));
+
+    let end = { ...plan.pos };
+    let outcome = 'stop';
+    // The step of the program the ghost is standing on the end of: the last
+    // one that runs, or the one that goes wrong.
+    let dirIndex = pending.length - 1;
+
+    if (plan.reachedGem) {
+      outcome = 'win';
+      dirIndex = plan.stepIndex;
+    } else if (plan.blocked === 'pit') {
+      // The robot really does step into the hole before it falls, so that is
+      // where the ghost has to stand.
+      outcome = 'fall';
+      dirIndex = plan.stepIndex;
+      end = { ...plan.troubleAt };
+      visit(end, done + plan.stepIndex + 1);
+    } else if (plan.blocked) {
+      outcome = 'bump';
+      dirIndex = plan.stepIndex;
+    }
+
+    return {
+      squares: [...squares.values()],
+      end,
+      outcome,
+      dir: pending[dirIndex] || this.robotDir,
+      atStep: done + dirIndex + 1,
+      // A rock the plan walks into, so the board can flag it too.
+      blockedBy: plan.blocked === 'rock' ? { ...plan.troubleAt } : null
+    };
+  }
+
+  // Paints the ghost's plan on one square: a numbered footprint for every step
+  // that lands here, and the see-through robot where the program runs out.
+  decorateGhostCell(cell, x, y, ghost) {
+    if (!ghost) return;
+
+    const here = ghost.squares.find(sq => sq.x === x && sq.y === y);
+    const isEnd = ghost.end.x === x && ghost.end.y === y;
+
+    if (ghost.blockedBy && ghost.blockedBy.x === x && ghost.blockedBy.y === y) {
+      cell.classList.add('ghost-blocked');
+    }
+
+    if (here) {
+      const badge = document.createElement('div');
+      badge.className = `ghost-step${isEnd ? ' at-end' : ''}${here.steps.length > 1 ? ' again' : ''}`;
+      badge.style.setProperty('--i', here.steps[0]);
+      badge.textContent = here.steps[0];
+      badge.title = here.steps.length > 1
+        ? `Steps ${here.steps.join(', ')}`
+        : `Step ${here.steps[0]}`;
+      cell.appendChild(badge);
+    }
+
+    if (!isEnd) return;
+
+    cell.classList.add('ghost-here', `ghost-${ghost.outcome}`);
+
+    // How the plan turns out, said with a picture. The wording underneath is
+    // for grown-ups reading the tooltip.
+    const outcomes = {
+      win: { mark: '🎉', text: `Step ${ghost.atStep} finishes the level` },
+      bump: { mark: '🚫', text: `Step ${ghost.atStep} cannot move - the robot stays here` },
+      fall: { mark: '⚠️', text: `Step ${ghost.atStep} falls in` }
+    };
+    const outcome = outcomes[ghost.outcome];
+    if (outcome) {
+      const mark = document.createElement('div');
+      mark.className = 'ghost-outcome';
+      mark.textContent = outcome.mark;
+      mark.title = outcome.text;
+      cell.appendChild(mark);
+    }
+
+    // The robot itself only goes down when the real one is somewhere else -
+    // drawn underneath it, the ghost would just look like a smudge.
+    if (this.robotPos.x === x && this.robotPos.y === y) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'robot-wrapper ghost-robot';
+    wrapper.setAttribute('aria-hidden', 'true');
+    wrapper.innerHTML = RobotGraphics.renderSVG(Customizer.equipped, {
+      direction: ghost.dir,
+      state: 'idle',
+      size: '100%'
+    });
+    cell.appendChild(wrapper);
+  }
+
+  // The ghost is a picture of the program, so every edit to the program
+  // changes it. Repainting the board is cheap enough to just do it.
+  refreshGhost() {
+    if (this.ghostOn) this.renderGrid();
+  }
+
+  toggleGhost() {
+    this.ghostOn = !this.ghostOn;
+    localStorage.setItem('robostep_ghost', this.ghostOn ? '1' : '0');
+    this.paintGhostButton();
+    Sound.playClick();
+    if (typeof Voice !== 'undefined') {
+      Voice.speakButton(this.ghostOn ? "Ghost on" : "Ghost off");
+    }
+    this.renderGrid();
+
+    if (!this.ghostOn) {
+      this.showMessage("👻 Ghost hidden.", "info");
+    } else if (this.commands.length === 0) {
+      this.showMessage("👻 Ghost on! Add steps and it shows where they take the robot.", "info");
+    } else {
+      this.showMessage("👻 Ghost on! It stands where your steps end up.", "info");
+    }
+  }
+
+  paintGhostButton() {
+    const btn = document.getElementById('btn-ghost');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', this.ghostOn ? 'true' : 'false');
+    btn.title = this.ghostOn ? "Hide the ghost preview" : "Show where the steps end up";
+    btn.setAttribute('aria-label', `Ghost preview: ${this.ghostOn ? 'on' : 'off'}`);
+  }
+
+  // ==========================================
   // COMMAND QUEUE MANAGEMENT
   // ==========================================
   // The robot has finished with this attempt: it won, fell, or is busy with
@@ -535,6 +706,7 @@ class GameController {
       Voice.speakButton(dir.toLowerCase());
     }
     this.renderCommandTape();
+    this.refreshGhost();
     this.updateControlsState();
   }
 
@@ -548,6 +720,7 @@ class GameController {
       Voice.speakButton("Remove");
     }
     this.renderCommandTape();
+    this.refreshGhost();
     this.updateControlsState();
   }
 
@@ -561,6 +734,7 @@ class GameController {
       Voice.speakButton("Undo");
     }
     this.renderCommandTape();
+    this.refreshGhost();
     this.updateControlsState();
   }
 
@@ -1571,6 +1745,11 @@ class GameController {
     document.getElementById('btn-undo').onclick = () => this.removeLastCommand();
     document.getElementById('btn-hint').onclick = () => this.showHint();
 
+    // Ghost preview toggle
+    const ghostBtn = document.getElementById('btn-ghost');
+    if (ghostBtn) ghostBtn.onclick = () => this.toggleGhost();
+    this.paintGhostButton();
+
     // Speed toggle
     const speedBtn = document.getElementById('btn-speed');
     const speeds = [
@@ -1761,6 +1940,9 @@ class GameController {
       } else if (['ArrowRight', 'KeyD'].includes(e.code)) {
         e.preventDefault();
         this.addCommand('RIGHT');
+      } else if (e.code === 'KeyG') {
+        e.preventDefault();
+        this.toggleGhost();
       } else if (e.code === 'Space') {
         e.preventDefault();
         if (this.isRunning) this.resetRobot();
