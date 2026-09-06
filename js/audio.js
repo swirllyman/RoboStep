@@ -351,6 +351,63 @@ class SoundEngine {
     });
   }
 
+  // One star landing in the win modal: a bright chime that climbs with each
+  // star, so three stars sound like a little rising fanfare.
+  playStarEarned(starIndex = 1) {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    // C6, E6, G6 - one note per star, so the third lands highest.
+    const root = [1046.50, 1318.51, 1567.98][Math.min(starIndex, 3) - 1] || 1046.50;
+
+    // The chime itself, plus a shimmering fifth above it.
+    [{ freq: root, gain: 0.22, dur: 0.5 }, { freq: root * 1.5, gain: 0.1, dur: 0.35 }]
+      .forEach(({ freq, gain: peak, dur }) => {
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(peak, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + dur + 0.05);
+      });
+  }
+
+  // The sparkle of a star burst: a quick shimmer of high, random plinks.
+  playSparkle() {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    for (let i = 0; i < 6; i++) {
+      const start = this.ctx.currentTime + i * 0.045;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400 + Math.random() * 1400, start);
+
+      gain.gain.setValueAtTime(0.09, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(start);
+      osc.stop(start + 0.2);
+    }
+  }
+
   // Unlocking new customization fanfare
   playUnlock() {
     if (this.muted) return;

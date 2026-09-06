@@ -36,6 +36,28 @@ Help your friendly robot navigate through expanding worlds to collect the shiny 
 
 ---
 
+## ⭐ Finishing a Level
+
+Reaching the gem (or serving the smoothie) sets off a star celebration built to be
+watchable rather than just noisy:
+
+- **The board bursts first**: twinkling stars fly out of the square the robot is
+  standing on — the spot the child is already looking at — plus a gentle shower
+  of stars drifting down the screen behind them. Every star spins and twinkles on
+  its own clock, so the screen shimmers instead of flashing all at once.
+- **Then the stars land, one at a time**: the win card's three stars drop in
+  about half a second apart, each with an overshooting pop, a spreading
+  shockwave ring, a warm glow, and its own rising chime (C6, E6, G6). Kids can
+  count them out loud as they arrive — *"one... two... three!"* — and the last
+  one earned finishes with a shimmer of sparkles.
+- **Stars you didn't earn** stay quietly dimmed, so it's obvious there's still a
+  better route to find.
+- **Reduced motion is respected**: with `prefers-reduced-motion: reduce`, the
+  stars still arrive and are still countable — they just don't fly, spin or
+  twinkle to get there.
+
+---
+
 ## 🗺️ 50 Progressive Levels & Worlds
 
 The grid expands slowly as the player learns and advances:

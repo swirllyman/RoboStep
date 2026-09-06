@@ -367,6 +367,20 @@ class GameController {
 
         // Robot
         if (this.robotPos.x === x && this.robotPos.y === y) {
+          // Winning square: a ring of stars pops out around the robot right
+          // where the child is already looking.
+          if (this.robotState === "victory" || this.robotState === "drinking") {
+            // The square lets the stars spill over its edges while it parties.
+            cell.classList.add('cell-celebrating');
+            const burst = document.createElement('div');
+            burst.className = 'cell-star-burst';
+            burst.setAttribute('aria-hidden', 'true');
+            burst.innerHTML = [0, 1, 2, 3, 4, 5]
+              .map(i => `<span class="burst-star" style="--i:${i}">⭐</span>`)
+              .join('');
+            cell.appendChild(burst);
+          }
+
           const robotWrapper = document.createElement('div');
           robotWrapper.className = `robot-wrapper state-${this.robotState}`;
           robotWrapper.innerHTML = RobotGraphics.renderSVG(Customizer.equipped, {
@@ -858,6 +872,15 @@ class GameController {
     this.updateControlsState();
   }
 
+  // The square the robot is standing on, so celebrations can burst out of the
+  // robot itself rather than from some arbitrary point on the screen.
+  robotCellEl() {
+    if (!this.gridEl) return null;
+    return this.gridEl.querySelector(
+      `.grid-cell[data-x="${this.robotPos.x}"][data-y="${this.robotPos.y}"]`
+    );
+  }
+
   showMessage(msg, type = "info") {
     this.statusMsgEl.textContent = msg;
     this.statusMsgEl.className = `status-message ${type}`;
@@ -877,7 +900,7 @@ class GameController {
       this.renderGrid();
       Sound.playGem();
       setTimeout(() => Sound.playWin(), 200);
-      triggerConfetti();
+      triggerStarCelebration(this.robotCellEl());
     }
 
     const stepCount = this.commands.length;
@@ -959,7 +982,7 @@ class GameController {
 
     // 3. Party.
     setTimeout(() => {
-      triggerConfetti();
+      triggerStarCelebration(this.robotCellEl());
       Sound.playWin();
     }, 1900);
   }
@@ -971,11 +994,7 @@ class GameController {
     const statsEl = document.getElementById('win-stats');
     const nextBtn = document.getElementById('win-btn-next');
 
-    starsContainer.innerHTML = `
-      <span class="star ${stars >= 1 ? 'earned' : ''}">⭐</span>
-      <span class="star ${stars >= 2 ? 'earned' : ''}">⭐</span>
-      <span class="star ${stars >= 3 ? 'earned' : ''}">⭐</span>
-    `;
+    this.revealStars(starsContainer, stars);
 
     const lvl = this.getCurrentLevel();
     const recipeLevel = this.isRecipeLevel(lvl);
@@ -1006,6 +1025,30 @@ class GameController {
     }
 
     modal.classList.add('open');
+  }
+
+  // The stars land one at a time, each with its own pop and its own chime, so
+  // a child can count them out loud as they arrive: "one... two... three!"
+  revealStars(container, stars) {
+    // A modal shown twice must not have two reveals running at once.
+    (this.starRevealTimers || []).forEach(clearTimeout);
+    this.starRevealTimers = [];
+
+    container.innerHTML = [1, 2, 3]
+      .map(n => `<span class="star${stars >= n ? '' : ' missed'}" data-star="${n}">⭐</span>`)
+      .join('');
+
+    const starEls = container.querySelectorAll('.star');
+    for (let n = 1; n <= 3; n++) {
+      if (stars < n) continue;
+      const el = starEls[n - 1];
+      this.starRevealTimers.push(setTimeout(() => {
+        el.classList.add('earned');
+        Sound.playStarEarned(n);
+        // The last star gets a little extra sparkle for the win.
+        if (n === stars) setTimeout(() => Sound.playSparkle(), 180);
+      }, 160 + (n - 1) * 420));
+    }
   }
 
   showMilestoneModal(reward, completedLevel, stars, stepCount) {
@@ -1056,6 +1099,10 @@ class GameController {
 
   closeModal(modalId) {
     document.getElementById(modalId).classList.remove('open');
+    if (modalId === 'win-modal') {
+      (this.starRevealTimers || []).forEach(clearTimeout);
+      this.starRevealTimers = [];
+    }
   }
 
   // ==========================================
@@ -1798,59 +1845,190 @@ function setButtonLabel(btn, emoji, label, ariaLabel) {
 }
 
 // ==========================================
-// CONFETTI CELEBRATION EFFECT
+// STAR CELEBRATION EFFECT
 // ==========================================
-function triggerConfetti() {
-  const canvas = document.getElementById('confetti-canvas');
+// A shower of twinkling stars for finishing a level: they burst out of the
+// square the robot is standing on and rain gently down the screen.
+
+// Only one celebration runs at a time - a second win cancels the first rather
+// than stacking another animation loop on top of it.
+let starCelebration = null;
+
+function prefersReducedMotion() {
+  return typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// A classic five-pointed star, drawn around (0, 0) so the caller can place
+// and spin it however it likes.
+function traceStar(ctx, radius, points = 5, innerRatio = 0.45) {
+  const step = Math.PI / points;
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? radius : radius * innerRatio;
+    const angle = i * step - Math.PI / 2;
+    const x = Math.cos(angle) * r;
+    const y = Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
+const STAR_COLORS = [
+  { fill: '#FBBF24', shine: '#FEF3C7' }, // gold
+  { fill: '#F59E0B', shine: '#FDE68A' }, // amber
+  { fill: '#FDE047', shine: '#FEFCE8' }, // sunshine
+  { fill: '#38BDF8', shine: '#E0F2FE' }, // sky
+  { fill: '#F472B6', shine: '#FCE7F3' }, // bubblegum
+  { fill: '#A78BFA', shine: '#EDE9FE' }  // grape
+];
+
+function makeStar(overrides = {}) {
+  const palette = STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)];
+  return {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    gravity: 0.28,
+    drag: 0.992,
+    size: Math.random() * 10 + 8,
+    points: Math.random() < 0.25 ? 4 : 5,
+    rotation: Math.random() * Math.PI * 2,
+    rotSpeed: (Math.random() - 0.5) * 0.22,
+    // Each star twinkles on its own clock, so the screen shimmers rather
+    // than pulsing all at once.
+    twinklePhase: Math.random() * Math.PI * 2,
+    twinkleSpeed: 0.12 + Math.random() * 0.12,
+    life: 0,
+    maxLife: 150 + Math.random() * 90,
+    fill: palette.fill,
+    shine: palette.shine,
+    ...overrides
+  };
+}
+
+// Where the celebration should come from: the middle of an element if we were
+// given one (the robot's square), otherwise the middle of the screen.
+function celebrationOrigin(originEl) {
+  if (originEl && typeof originEl.getBoundingClientRect === 'function') {
+    const rect = originEl.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+  }
+  return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.4 };
+}
+
+function triggerStarCelebration(originEl) {
+  const canvas = document.getElementById('celebration-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  if (!ctx) return;
 
-  const pieces = [];
-  const colors = ['#F59E0B', '#10B981', '#3B82F6', '#EC4899', '#8B5CF6', '#EF4444'];
-
-  for (let i = 0; i < 80; i++) {
-    pieces.push({
-      x: canvas.width * 0.5 + (Math.random() - 0.5) * 200,
-      y: canvas.height * 0.4,
-      vx: (Math.random() - 0.5) * 14,
-      vy: -Math.random() * 12 - 4,
-      size: Math.random() * 9 + 5,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      rotation: Math.random() * 360,
-      rotSpeed: (Math.random() - 0.5) * 12
-    });
+  if (starCelebration) {
+    cancelAnimationFrame(starCelebration.frame);
+    starCelebration = null;
   }
 
-  let animationFrame;
-  let alpha = 1;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = `${window.innerWidth}px`;
+  canvas.style.height = `${window.innerHeight}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const origin = celebrationOrigin(originEl);
+  const gentle = prefersReducedMotion();
+  const stars = [];
+
+  // 1. The burst: stars fired out of the robot's square in every direction.
+  const burstCount = gentle ? 14 : 46;
+  for (let i = 0; i < burstCount; i++) {
+    const angle = (i / burstCount) * Math.PI * 2 + Math.random() * 0.4;
+    const speed = gentle ? 1.2 + Math.random() : 5 + Math.random() * 8;
+    stars.push(makeStar({
+      x: origin.x + (Math.random() - 0.5) * 18,
+      y: origin.y + (Math.random() - 0.5) * 18,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - (gentle ? 0.5 : 3),
+      gravity: gentle ? 0.04 : 0.3,
+      rotSpeed: gentle ? 0 : (Math.random() - 0.5) * 0.22,
+      twinkleSpeed: gentle ? 0.05 : 0.12 + Math.random() * 0.12,
+      size: gentle ? Math.random() * 6 + 8 : Math.random() * 12 + 9,
+      maxLife: gentle ? 70 : 150 + Math.random() * 90
+    }));
+  }
+
+  // 2. The shower: stars drifting down across the whole screen behind it.
+  const showerCount = gentle ? 0 : 34;
+  for (let i = 0; i < showerCount; i++) {
+    stars.push(makeStar({
+      x: Math.random() * width,
+      y: -Math.random() * height * 0.6 - 20,
+      vx: (Math.random() - 0.5) * 2.4,
+      vy: 1.5 + Math.random() * 2.5,
+      gravity: 0.06,
+      size: Math.random() * 8 + 6,
+      maxLife: 260
+    }));
+  }
+
+  const state = { frame: 0 };
+  starCelebration = state;
 
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    let allFell = true;
+    ctx.clearRect(0, 0, width, height);
+    let alive = false;
 
-    pieces.forEach(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.35; // gravity
-      p.rotation += p.rotSpeed;
+    stars.forEach(star => {
+      star.life++;
+      star.vx *= star.drag;
+      star.vy = star.vy * star.drag + star.gravity;
+      star.x += star.vx;
+      star.y += star.vy;
+      star.rotation += star.rotSpeed;
+      star.twinklePhase += star.twinkleSpeed;
 
-      if (p.y < canvas.height) allFell = false;
+      // Fade out over the last third of the star's life.
+      const fadeFrom = star.maxLife * 0.65;
+      const fade = star.life < fadeFrom
+        ? 1
+        : Math.max(0, 1 - (star.life - fadeFrom) / (star.maxLife - fadeFrom));
+      if (fade <= 0 || star.y - star.size > height) return;
+      alive = true;
+
+      // The twinkle: the star breathes between about 70% and 100% of its size.
+      const twinkle = 0.85 + Math.sin(star.twinklePhase) * 0.15;
+      const radius = star.size * twinkle;
 
       ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate((p.rotation * Math.PI) / 180);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      ctx.globalAlpha = fade;
+      ctx.translate(star.x, star.y);
+      ctx.rotate(star.rotation);
+
+      ctx.fillStyle = star.fill;
+      traceStar(ctx, radius, star.points);
+      ctx.fill();
+
+      // A smaller pale star inside catches the light.
+      ctx.globalAlpha = fade * 0.9;
+      ctx.fillStyle = star.shine;
+      traceStar(ctx, radius * 0.42, star.points);
+      ctx.fill();
+
       ctx.restore();
     });
 
-    if (!allFell) {
-      animationFrame = requestAnimationFrame(draw);
+    if (alive) {
+      state.frame = requestAnimationFrame(draw);
     } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      cancelAnimationFrame(animationFrame);
+      ctx.clearRect(0, 0, width, height);
+      cancelAnimationFrame(state.frame);
+      if (starCelebration === state) starCelebration = null;
     }
   }
 
