@@ -448,6 +448,161 @@ const same = (a, b) => a.x === b.x && a.y === b.y;
     );
   }
 
+  // 8. The ghost preview is a promise about the run: wherever the ghost is
+  //    standing, the real robot has to finish on exactly that square.
+  {
+    const r = await page.evaluate(async () => {
+      const game = window.game;
+      const count = (sel) => document.querySelectorAll(sel).length;
+      const pressed = () => document.getElementById('btn-ghost').getAttribute('aria-pressed');
+      const runToEnd = () => {
+        game.runAll();
+        return new Promise((resolve) => {
+          const done = () => (game.isRunning ? setTimeout(done, 20) : resolve());
+          setTimeout(done, 20);
+        });
+      };
+      const plan = (levelNumber, commands) => {
+        game.loadLevel(levelNumber - 1);
+        commands.forEach((c) => game.addCommand(c));
+        return game.ghostPreview();
+      };
+      const out = {};
+
+      // Off: the board stays clean.
+      if (game.ghostOn) game.toggleGhost();
+      plan(3, ['RIGHT', 'RIGHT', 'DOWN']);
+      out.off = { marks: count('.ghost-step, .ghost-robot'), pressed: pressed() };
+
+      // On: a numbered footprint per step, and one ghost robot at the end.
+      game.toggleGhost();
+      const commands = ['RIGHT', 'RIGHT', 'DOWN'];
+      const ghost = plan(3, commands);
+      out.on = {
+        pressed: pressed(),
+        steps: count('.ghost-step'),
+        robots: count('.ghost-robot'),
+        ends: count('.ghost-here'),
+        firstBadge: document.querySelector('.ghost-step').textContent,
+        squares: ghost.squares.length
+      };
+
+      // The picture moves with the program it describes.
+      const before = { ...ghost.end };
+      game.addCommand('DOWN');
+      out.followsEdits = { before, after: { ...game.ghostPreview().end } };
+      game.removeLastCommand();
+      out.followsUndo = { ...game.ghostPreview().end };
+
+      // A hint owns the board while it is up, so the ghost stands aside.
+      game.showHint();
+      out.duringHint = count('.ghost-step, .ghost-robot');
+      game.clearHint();
+      out.afterHint = count('.ghost-step');
+
+      // Cases covering every way a program can end: running out of steps,
+      // reaching the gem, bumping, and falling in.
+      const cases = [
+        { name: 'runs out of steps', levelNumber: 3, commands: ['RIGHT'] },
+        { name: 'walks off the edge', levelNumber: 7, commands: ['UP', 'UP', 'UP', 'UP', 'UP'] },
+        { name: 'bumps into a rock', levelNumber: 12, commands: ['DOWN', 'RIGHT', 'RIGHT', 'RIGHT'] },
+        {
+          name: 'reaches the gem',
+          levelNumber: 3,
+          commands: game.solveBFS(LEVELS[2], LEVELS[2].start)
+        }
+      ];
+
+      // Walk to a square beside a pit, then straight into it.
+      for (const lvl of LEVELS) {
+        let found = null;
+        for (const pit of lvl.pits) {
+          for (const dir of Object.keys(STEP_DELTAS)) {
+            const d = STEP_DELTAS[dir];
+            const from = { x: pit.x - d.dx, y: pit.y - d.dy };
+            if (from.x < 0 || from.y < 0 || from.x >= lvl.width || from.y >= lvl.height) continue;
+            const route = game.solveBFS(lvl, lvl.start, from);
+            if (!route.length) continue;
+            const candidate = { name: 'falls into a pit', levelNumber: lvl.id, commands: [...route, dir] };
+            if (plan(candidate.levelNumber, candidate.commands).outcome === 'fall') {
+              found = candidate;
+              break;
+            }
+          }
+          if (found) break;
+        }
+        if (found) {
+          cases.push(found);
+          break;
+        }
+      }
+
+      out.cases = [];
+      for (const c of cases) {
+        const ghosted = plan(c.levelNumber, c.commands);
+        const promised = { ...ghosted.end };
+        const outcome = ghosted.outcome;
+        await runToEnd();
+        out.cases.push({
+          name: c.name,
+          outcome,
+          promised,
+          landedOn: { ...game.robotPos },
+          state: game.robotState
+        });
+      }
+
+      return out;
+    });
+
+    check(
+      'the ghost draws nothing until it is switched on',
+      r.off.marks === 0 && r.off.pressed === 'false',
+      JSON.stringify(r.off)
+    );
+    check(
+      'switching it on numbers every square of the program and stands at the end',
+      r.on.pressed === 'true' && r.on.steps === 3 && r.on.squares === 3 &&
+        r.on.robots === 1 && r.on.ends === 1 && r.on.firstBadge === '1',
+      JSON.stringify(r.on)
+    );
+    check(
+      'the ghost follows edits to the program',
+      !same(r.followsEdits.before, r.followsEdits.after) &&
+        same(r.followsUndo, r.followsEdits.before),
+      JSON.stringify(r.followsEdits)
+    );
+    check(
+      'a hint takes the board over, and the ghost comes back after it',
+      r.duringHint === 0 && r.afterHint > 0,
+      `${r.duringHint} marks during the hint, ${r.afterHint} after`
+    );
+
+    r.cases.forEach((c) => {
+      check(
+        `the ghost stands where the robot ends up when it ${c.name}`,
+        same(c.promised, c.landedOn),
+        `ghost said ${JSON.stringify(c.promised)}, robot reached ${JSON.stringify(c.landedOn)}`
+      );
+    });
+
+    const outcomes = Object.fromEntries(r.cases.map((c) => [c.name, c.outcome]));
+    check(
+      'the ghost names the outcome it is showing',
+      outcomes['reaches the gem'] === 'win' &&
+        outcomes['walks off the edge'] === 'bump' &&
+        outcomes['bumps into a rock'] === 'bump' &&
+        outcomes['runs out of steps'] === 'stop' &&
+        (!('falls into a pit' in outcomes) || outcomes['falls into a pit'] === 'fall'),
+      JSON.stringify(outcomes)
+    );
+    check(
+      'every way a program can end is covered',
+      r.cases.length === 5,
+      `only ${r.cases.length} cases ran`
+    );
+  }
+
   await browser.close();
 
   if (failures.length) {

@@ -270,6 +270,51 @@ const runAndCelebrate = `async () => {
     JSON.stringify(progress)
   );
 
+  // 6. The ghost preview knows the recipe: rolling onto the blender early is
+  //    not a win, and the ghost must not pretend it is.
+  const ghost = await page.evaluate(({ solveSrc }) => {
+    const solve = eval(solveSrc);
+    const game = window.game;
+    game.setMode('smoothie');
+    if (!game.ghostOn) game.toggleGhost();
+
+    const idx = SMOOTHIE_LEVELS.findIndex((l) => l.id === 5);
+    const level = SMOOTHIE_LEVELS[idx];
+
+    // Straight to the blender with an empty basket.
+    game.loadLevel(idx);
+    game.solveBFS(level, level.start, level.blender).forEach((c) => game.addCommand(c));
+    const empty = game.ghostPreview();
+
+    // The whole recipe, then the blender.
+    game.loadLevel(idx);
+    solve(idx).forEach((c) => game.addCommand(c));
+    const full = game.ghostPreview();
+
+    const out = {
+      emptyOutcome: empty.outcome,
+      emptyEnd: { ...empty.end },
+      fullOutcome: full.outcome,
+      fullEnd: { ...full.end },
+      blender: { ...level.blender },
+      wins: document.querySelectorAll('.ghost-win').length
+    };
+    game.toggleGhost();
+    return out;
+  }, { solveSrc: SOLVE_IN_PAGE });
+
+  const onBlender = (p) => p.x === ghost.blender.x && p.y === ghost.blender.y;
+  check(
+    'the ghost does not call an empty-handed blender a win',
+    ghost.emptyOutcome === 'stop' && onBlender(ghost.emptyEnd),
+    JSON.stringify(ghost)
+  );
+  check(
+    'the ghost calls the complete recipe a win, on the blender',
+    ghost.fullOutcome === 'win' && onBlender(ghost.fullEnd) && ghost.wins === 1,
+    JSON.stringify(ghost)
+  );
+
   await browser.close();
 
   if (failures.length) {
